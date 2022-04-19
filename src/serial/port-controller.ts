@@ -16,4 +16,9 @@ export class PortController {
     await this.port.open(this.serialOptions);
     this.connected = true;
   }
+
+  async disconnect() {
+    await this.port.close();
+    this.connected = false;
+  }
 }
