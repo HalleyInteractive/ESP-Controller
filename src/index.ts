@@ -15,3 +15,17 @@
  */
 
 'use strict';
+
+import {PortController} from './serial/port-controller';
+let controller: PortController | undefined = undefined;
+async function initPortController() {
+  const port = await navigator.serial.requestPort();
+  controller = new PortController(port);
+  controller.connect();
+}
+
+document.getElementById('btn')?.addEventListener('click', () => {
+  initPortController().catch(error => {
+    console.error(error);
+  });
+});

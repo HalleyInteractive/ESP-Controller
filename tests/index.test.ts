@@ -6,7 +6,9 @@ describe('Connect port on PortController', () => {
       open: jest.fn(),
       close: jest.fn(),
     };
-    const portController: PortController = new PortController(mockPort);
+
+    const stream: WritableStream<Uint8Array> = new WritableStream();
+    const portController: PortController = new PortController(mockPort, stream);
 
     expect(portController.connected).toBe(false);
 
