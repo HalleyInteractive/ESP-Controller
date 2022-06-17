@@ -9,18 +9,53 @@ export class PortController {
   };
 
   connected: Boolean = false;
-  private stream: ReadableStream<string> | undefined;
-  private reader: ReadableStreamDefaultReader<string> | undefined;
+  private logStream: ReadableStream<string> | undefined;
+  private logReader: ReadableStreamDefaultReader<string> | undefined;
+  private commandStream: ReadableStream<Uint8Array> | undefined;
+  private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
   }
 
-  async connect(): Promise<ReadableStream<Uint8Array>> {
-    console.log('Controller connect to port');
-    await this.port.open(this.serialOptions);
-    const [stream1, stream2] = this.port.readable.tee();
-    this.stream = stream1
+  async connect(): Promise<void> {
+    if(!this.connected) {
+      console.log('Controller connect to port');
+
+      await this.port.open(this.serialOptions);
+      const [stream1, stream2] = this.port.readable.tee();
+      this.logStream = this.setupLogStream(stream1);
+      this.logReader = this.logStream.getReader();
+      this.logReader.read().then(this.processStream.bind(this));
+
+      this.commandStream = stream2;
+      this.connected = true;
+    }
+  }
+
+  async disconnect() {
+    if(this.connected) {
+      await this.logReader?.cancel();
+      this.logReader?.releaseLock();
+      await this.logStream?.cancel();
+      console.log('Disconnected logStream');
+
+      // TODO: When command stream is implemented change to this.commandReader?....
+      const commandStreamReader = await this.commandStream?.getReader();
+      await commandStreamReader?.cancel();
+      commandStreamReader?.releaseLock();
+      await this.commandStream?.cancel();
+      console.log('Disconnected commandStream');
+
+      await this.port.close();
+      console.log('Closed Port');
+
+      this.connected = false;
+    }
+  }
+
+  setupLogStream(stream:ReadableStream<Uint8Array>): ReadableStream<string> {
+    return stream
       .pipeThrough(new TextDecoderStream())
       .pipeThrough(
         new TransformStream<string, string>(new LineBreakTransformer())
@@ -28,26 +63,13 @@ export class PortController {
       .pipeThrough(
         new TransformStream<string, string>(new LoggingTransformer())
       );
-    this.reader = this.stream.getReader();
-    this.reader.read().then(this.processStream.bind(this));
-    return stream2;
-  }
-
-  async disconnect() {
-    this.connected = false;
-    await this.port.close();
   }
 
   processStream(
     result: ReadableStreamDefaultReadResult<string>
   ): Promise<ReadableStreamDefaultReadValueResult<string> | undefined> {
-    if (result?.done) {
-      console.log('LAST CHUNK: ', result.value);
-    } else {
-      console.log('CHUNK: ', result?.value);
-      if (this?.reader) {
-        return this.reader?.read().then(this.processStream.bind(this));
-      }
+    if (!result?.done && this?.logReader && this.connected) {
+      return this.logReader?.read().then(this.processStream.bind(this));
     }
     return new Promise(resolve => {
       resolve(undefined);

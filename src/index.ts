@@ -24,8 +24,12 @@ async function initPortController() {
   controller.connect();
 }
 
-document.getElementById('btn')?.addEventListener('click', () => {
+document.getElementById('btn-connect')?.addEventListener('click', () => {
   initPortController().catch(error => {
     console.error(error);
   });
+});
+
+document.getElementById('btn-disconnect')?.addEventListener('click', () => {
+  controller?.disconnect();
 });
