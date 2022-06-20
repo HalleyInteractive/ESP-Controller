@@ -6,7 +6,6 @@ import {
 import {sleep} from './utils/common';
 
 import {
-  SlipStreamDecoder,
   SlipStreamTransformDirection,
   SlipStreamTransformer,
 } from 'serial-line-internet-protocol';
@@ -59,24 +58,12 @@ export class PortController {
         )
         .getReader();
 
-      // const preSlipLogger = new TransformStream<Uint8Array, Uint8Array>(
-      //   new Uint8LoggingTransformer('PRE-SLIP-COMMAND')
-      // );
-
       const slipStreamEncoder = new TransformStream(
         new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
       );
 
-      // const postSlipLogger = new TransformStream<Uint8Array, Uint8Array>(
-      //   new Uint8LoggingTransformer('POST-SLIP-COMMAND')
-      // );
-
-      // preSlipLogger.readable.pipeTo(slipStreamEncoder.writable);
-      // slipStreamEncoder.readable.pipeTo(postSlipLogger.writable);
-      // postSlipLogger.readable.pipeTo(this.port.writable);
       slipStreamEncoder.readable.pipeTo(this.port.writable);
       this.commandWriter = slipStreamEncoder;
-      // this.commandWriter = preSlipLogger;
 
       this.connected = true;
     }
