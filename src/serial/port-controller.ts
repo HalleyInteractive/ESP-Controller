@@ -9,7 +9,7 @@ import {
   SlipStreamTransformDirection,
   SlipStreamTransformer,
 } from 'serial-line-internet-protocol';
-import {ESP32DataPacket} from './ESP32CommandPacket';
+import {ESP32Command, ESP32DataPacket} from './ESP32CommandPacket';
 export class PortController {
   private serialOptions: SerialOptions = {
     baudRate: 115200,
@@ -26,9 +26,14 @@ export class PortController {
   private commandStream: ReadableStream<Uint8Array> | undefined;
   private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   private commandWriter: TransformStream<Uint8Array, Uint8Array> | undefined;
+  private slipStreamDecoder: SlipStreamTransformer;
 
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
+    this.slipStreamDecoder = new SlipStreamTransformer(
+      SlipStreamTransformDirection.Decoding,
+      true
+    );
   }
 
   async connect(): Promise<void> {
@@ -42,15 +47,9 @@ export class PortController {
       this.logReader.read().then(this.processStream.bind(this));
 
       this.commandStream = stream2;
+
       this.commandReader = this.commandStream
-        .pipeThrough(
-          new TransformStream(
-            new SlipStreamTransformer(
-              SlipStreamTransformDirection.Decoding,
-              true
-            )
-          )
-        )
+        .pipeThrough(new TransformStream(this.slipStreamDecoder))
         .pipeThrough(
           new TransformStream<Uint8Array, Uint8Array>(
             new Uint8LoggingTransformer()
@@ -69,6 +68,10 @@ export class PortController {
     }
   }
 
+  reframe() {
+    this.slipStreamDecoder.reFrame();
+  }
+
   async disconnect() {
     if (this.connected) {
       await this.logReader?.cancel();
@@ -76,10 +79,13 @@ export class PortController {
       await this.logStream?.cancel();
       console.log('Disconnected logStream');
 
-      this.commandReader?.releaseLock();
+      // this.commandReader?.releaseLock();
       await this.commandReader?.cancel();
-      await this.commandStream?.cancel();
+      // await this.commandStream?.cancel();
       console.log('Disconnected commandStream');
+
+      this.commandWriter?.readable.getReader().releaseLock();
+      // this.commandWriter?.readable.cancel();
 
       await this.port.close();
       console.log('Closed Port');
@@ -95,19 +101,18 @@ export class PortController {
     writer?.releaseLock();
   }
 
-  async response(timeout: number): Promise<ESP32DataPacket> {
-    const responsePromise = new Promise<ESP32DataPacket>((resolve, reject) => {
+  async response(timeout: number): Promise<Uint8Array> {
+    const responsePromise = new Promise<Uint8Array>((resolve, reject) => {
       this.commandReader
         ?.read()
         .then((responseData: ReadableStreamDefaultReadResult<Uint8Array>) => {
-          const responsePacket = new ESP32DataPacket();
-          if (responseData?.value) {
-            responsePacket.parseResponse(responseData?.value);
-            resolve(responsePacket);
+          if (responseData.value) {
+            resolve(responseData.value);
+          } else {
+            reject('NO RESPONSE DATA');
           }
         });
       sleep(timeout).then(() => {
-        console.log('Response timeout');
         reject('TIMEOUT');
       });
     });

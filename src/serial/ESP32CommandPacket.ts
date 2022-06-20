@@ -69,12 +69,12 @@ export class ESP32DataPacket {
   }
 
   get data(): Uint8Array {
-    return this.data;
+    return this.packetData;
   }
 
   parseResponse(responsePacket: Uint8Array) {
     const responseDataView = new DataView(responsePacket.buffer);
-    this.direction = responseDataView.getUint8(1) as ESP32DataPacketDirection;
+    this.direction = responseDataView.getUint8(0) as ESP32DataPacketDirection;
     this.command = responseDataView.getUint8(1) as ESP32Command;
     this.size = responseDataView.getUint16(2, true);
     this.value = responseDataView.getUint32(4, true);

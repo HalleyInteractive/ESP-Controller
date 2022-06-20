@@ -45,5 +45,17 @@ document.getElementById('btn-reset')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-sync')?.addEventListener('click', () => {
-  esp32Controller.sync();
+  esp32Controller.sync().catch(error => {
+    console.log('ERROR', error);
+  });
+});
+
+document.getElementById('btn-chip')?.addEventListener('click', () => {
+  esp32Controller.readChipFamily().catch(error => {
+    console.log('ERROR', error);
+  });
+});
+
+document.getElementById('btn-reframe')?.addEventListener('click', () => {
+  esp32Controller.reframe();
 });
