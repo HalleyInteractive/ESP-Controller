@@ -29,8 +29,10 @@ module.exports = {
   optimization: {
     runtimeChunk: 'single',
   },
-  plugins: [new HtmlWebpackPlugin({
-    title: 'ESP32 Controller',
-    template: './src/index.html'
-  })],
+  plugins: [
+    new HtmlWebpackPlugin({
+      title: 'ESP32 Controller',
+      template: './src/index.html',
+    }),
+  ],
 };

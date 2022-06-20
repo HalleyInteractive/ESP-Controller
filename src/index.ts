@@ -16,20 +16,34 @@
 
 'use strict';
 
-import {PortController} from './serial/port-controller';
-let controller: PortController | undefined = undefined;
-async function initPortController() {
-  const port = await navigator.serial.requestPort();
-  controller = new PortController(port);
-  controller.connect();
+import {ESP32Controller} from './esp32-controller';
+
+const esp32Controller: ESP32Controller = new ESP32Controller();
+
+async function initESP32Controller() {
+  await esp32Controller.init();
+}
+
+async function stopESP32Controller() {
+  await esp32Controller.stop();
 }
 
 document.getElementById('btn-connect')?.addEventListener('click', () => {
-  initPortController().catch(error => {
+  initESP32Controller().catch(error => {
     console.error(error);
   });
 });
 
 document.getElementById('btn-disconnect')?.addEventListener('click', () => {
-  controller?.disconnect();
+  stopESP32Controller().catch(error => {
+    console.error(error);
+  });
+});
+
+document.getElementById('btn-reset')?.addEventListener('click', () => {
+  esp32Controller.reset();
+});
+
+document.getElementById('btn-sync')?.addEventListener('click', () => {
+  esp32Controller.sync();
 });
