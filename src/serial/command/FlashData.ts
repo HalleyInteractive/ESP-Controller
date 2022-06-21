@@ -29,6 +29,6 @@ export class FlashDataCommand extends ESP32DataPacket {
 
     flashDownloadData.set(block, 16);
     this.data = flashDownloadData;
-    this.checksum = this.generateChecksum(flashDownloadData);
+    this.checksum = this.generateChecksum(block);
   }
 }

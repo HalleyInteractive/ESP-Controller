@@ -5,7 +5,7 @@ import {
 } from '../ESP32CommandPacket';
 
 export class SPIFlashBeginCommand extends ESP32DataPacket {
-  private flashBeginData = new ArrayBuffer(24);
+  private flashBeginData = new ArrayBuffer(16);
   private eraseSizeView = new DataView(this.flashBeginData, 0, 4);
   private numDataPacketsView = new DataView(this.flashBeginData, 4, 4);
   private dataSizeView = new DataView(this.flashBeginData, 8, 4);
