@@ -14,8 +14,8 @@ export class SPIAttachCommand extends ESP32DataPacket {
     this.direction = ESP32DataPacketDirection.REQUEST;
     this.command = ESP32Command.SPI_ATTACH;
 
-    this.view1.setUint32(0, 0);
-    this.view2.setUint32(0, 0);
+    this.view1.setUint32(0, 0, true);
+    this.view2.setUint32(0, 0, true);
     this.data = new Uint8Array(this.spiAttachData);
   }
 }

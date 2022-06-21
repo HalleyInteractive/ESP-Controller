@@ -17,12 +17,12 @@ export class SPISetParamsCommand extends ESP32DataPacket {
     super();
     this.direction = ESP32DataPacketDirection.REQUEST;
     this.command = ESP32Command.SPI_SET_PARAMS;
-    this.id.setUint32(0, 0);
-    this.totalSize.setUint32(0, 4 * 1024 * 1024);
-    this.blockSize.setUint32(0, 0x10000);
-    this.sectorSize.setUint32(0, 0x1000);
-    this.pageSize.setUint32(0, 0x100);
-    this.statusMask.setUint32(0, 0xffff);
+    this.id.setUint32(0, 0, true);
+    this.totalSize.setUint32(0, 4 * 1024 * 1024, true);
+    this.blockSize.setUint32(0, 0x10000, true);
+    this.sectorSize.setUint32(0, 0x1000, true);
+    this.pageSize.setUint32(0, 0x100, true);
+    this.statusMask.setUint32(0, 0xffff, true);
     this.data = new Uint8Array(this.paramsData);
   }
 }

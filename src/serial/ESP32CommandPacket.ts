@@ -66,6 +66,14 @@ export class ESP32DataPacket {
     return new DataView(this.packetHeader.buffer, 4, 4).getUint32(0, true);
   }
 
+  get status(): number {
+    return new DataView(this.packetData.buffer, 0, 1).getUint8(0);
+  }
+
+  get error(): number {
+    return new DataView(this.packetData.buffer, 1, 1).getUint8(0);
+  }
+
   generateChecksum(data: Uint8Array): number {
     let cs = 0xef;
     for (const byte of data) {
@@ -90,6 +98,42 @@ export class ESP32DataPacket {
     this.size = responseDataView.getUint16(2, true);
     this.value = responseDataView.getUint32(4, true);
     this.packetData = responsePacket.slice(8);
+
+    // console.groupCollapsed('PARSED RESPONSE');
+    // console.log('RESPONSE', responsePacket);
+    // console.log('DIRECTION', this.direction);
+    // console.log('COMMAND', this.command);
+    // console.log('SIZE', this.size);
+    // console.log('VALUE', this.value);
+    // console.log('DATA', this.packetData);
+    // console.log('STATUS: ', this.status);
+    // console.log('ERROR: ', this.error);
+    // console.groupEnd();
+
+    if (this.status === 1) {
+      console.log(this.getErrorMessage(this.error));
+    }
+  }
+
+  getErrorMessage(error: number): string {
+    switch (error) {
+      case 0x05:
+        return 'Status Error: Received message is invalid. (parameters or length field is invalid)';
+      case 0x06:
+        return 'Failed to act on received message';
+      case 0x07:
+        return 'Invalid CRC in message';
+      case 0x08:
+        return "flash write error - after writing a block of data to flash, the ROM loader reads the value back and the 8-bit CRC is compared to the data read from flash. If they don't match, this error is returned.";
+      case 0x09:
+        return 'flash read error - SPI read failed';
+      case 0x0a:
+        return 'flash read length error - SPI read request length is too long';
+      case 0x0b:
+        return 'Deflate error (compressed uploads only)';
+      default:
+        return 'No error status for response';
+    }
   }
 
   getPacketData(): Uint8Array {

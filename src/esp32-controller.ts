@@ -1,7 +1,7 @@
 import {BinFilePartion} from './partition';
 import {FlashDataCommand} from './serial/command/FlashData';
-import { SPIAttachCommand } from './serial/command/SPIAttach';
-import {SPIFlashBeginCommand} from './serial/command/SPIFlashBegin';
+import {SPIAttachCommand} from './serial/command/SPIAttach';
+import {FlashBeginCommand} from './serial/command/FlashBegin';
 import {SPISetParamsCommand} from './serial/command/SPISetParams';
 import {
   ESP32Command,
@@ -10,11 +10,19 @@ import {
 } from './serial/ESP32CommandPacket';
 import {PortController} from './serial/port-controller';
 import {sleep} from './serial/utils/common';
+import {ReadRegCommand} from './serial/command/ReadReg';
 
+enum ChipFamily {
+  UNKNOWN = 0,
+  ESP8266 = 1,
+  ESP32 = 2,
+  ESP32S2 = 3,
+}
 export class ESP32Controller {
   private controller: PortController | undefined;
   private port: SerialPort | undefined;
   private synced = false;
+  private chipFamily: ChipFamily = 0;
   constructor() {}
 
   async init() {
@@ -47,8 +55,8 @@ export class ESP32Controller {
       syncCommand.checksum = 0;
       await this.controller?.write(syncCommand.getPacketData());
       try {
-        const response = await this.readResponse(ESP32Command.SYNC);
-        console.log('RESPONSE', response);
+        const response = await this.readResponse(ESP32Command.SYNC, 200);
+        console.log('SYNCED', response);
         this.synced = true;
         break;
       } catch (error) {
@@ -60,36 +68,39 @@ export class ESP32Controller {
   }
 
   async readChipFamily() {
-    const readRegCommand = new ESP32DataPacket();
-    readRegCommand.command = ESP32Command.READ_REG;
-    readRegCommand.direction = ESP32DataPacketDirection.REQUEST;
-    const address = new ArrayBuffer(4);
-    new DataView(address).setUint32(0, 0x60000078, true);
-    readRegCommand.data = new Uint8Array(address);
+    const readRegCommand = new ReadRegCommand(0x60000078);
     await this.controller?.write(readRegCommand.getPacketData());
     const response = await this.readResponse(ESP32Command.READ_REG);
 
     if (response?.command === ESP32Command.READ_REG) {
       switch (response.value) {
         case 0x15122500:
+          this.chipFamily = ChipFamily.ESP32;
           console.log('CHIP FAMILY: ESP32');
           break;
         case 0x500:
+          this.chipFamily = ChipFamily.ESP32S2;
           console.log('CHIP FAMILY: ESP32S2');
           break;
         case 0x00062000:
+          this.chipFamily = ChipFamily.ESP8266;
           console.log('CHIP FAMILY: ESP8266');
+          break;
+        default:
+          this.chipFamily = ChipFamily.UNKNOWN;
           break;
       }
     }
-    console.group('RESPONSE');
-    console.log('RESPONSE', response);
-    console.log('DIRECTION', response?.direction);
-    console.log('COMMAND', response?.command);
-    console.log('SIZE', response?.size);
-    console.log('VALUE', response?.value);
-    console.log('DATA', response?.data);
-    console.groupEnd();
+
+    const baseAddress = [0, 0x3ff00050, 0x6001a000, 0x6001a000][
+      this.chipFamily
+    ];
+    for (let i = 0; i < 4; i++) {
+      const readRegCommand = new ReadRegCommand(baseAddress + 4 * i);
+      await this.controller?.write(readRegCommand.getPacketData());
+      const response = await this.readResponse(ESP32Command.READ_REG);
+      console.log(`eFuse ${i}`, response);
+    }
   }
 
   async flashImage() {
@@ -107,35 +118,52 @@ export class ESP32Controller {
       const app = new BinFilePartion(0x10000, './bin/simple_arduino.ino.bin');
       await app.load();
 
-      const flashBeginCMD = new SPIFlashBeginCommand(app.binary, app.offset);
-      await this.controller.write(flashBeginCMD.getPacketData());
-      await this.readResponse(ESP32Command.FLASH_BEGIN);
-      console.log('FLASH BEGIN SENT');
-
-      // const packetSize = 64 * 1024;
       const packetSize = 512;
       const numPackets = Math.ceil(app.binary.length / packetSize);
+
+      const flashBeginCMD = new FlashBeginCommand(
+        app.binary,
+        app.offset,
+        packetSize,
+        numPackets
+      );
+      await this.controller.write(flashBeginCMD.getPacketData());
+      await this.readResponse(
+        ESP32Command.FLASH_BEGIN,
+        (30000 * numPackets * packetSize) / 1000000 + 500
+      );
+      console.log('FLASH BEGIN SENT');
 
       for (let i = 0; i < numPackets; i++) {
         const flashCommand = new FlashDataCommand(app.binary, i, packetSize);
         await this.controller.write(flashCommand.getPacketData());
-        console.log(`block ${i + 1}/${numPackets}`);
-        await this.readResponse(ESP32Command.FLASH_DATA);
+        console.log(
+          `block ${i + 1}/${numPackets}, giving response timeout: ${
+            (30000 * numPackets * packetSize) / 1000000 + 500
+          }`
+        );
+        await this.readResponse(
+          ESP32Command.FLASH_DATA,
+          (30000 * numPackets * packetSize) / 1000000 + 500
+        );
       }
     }
   }
 
-  async readResponse(cmd: ESP32Command): Promise<ESP32DataPacket> {
+  async readResponse(
+    cmd: ESP32Command,
+    timeout = 2000
+  ): Promise<ESP32DataPacket> {
     const responsePacket = new ESP32DataPacket();
     // let reframed = false;
     if (this.controller) {
-      const maxAttempts = 20;
+      const maxAttempts = 10;
       for (let i = 0; i < maxAttempts; i++) {
         // if (i > maxAttempts / 2 && !reframed) {
         //   this.reframe();
         //   reframed = true;
         // }
-        const response = await this.controller?.response(5000);
+        const response = await this.controller?.response(timeout);
         try {
           responsePacket.parseResponse(response);
         } catch (error) {
@@ -156,6 +184,25 @@ export class ESP32Controller {
       }
     }
     return responsePacket;
+  }
+
+  log() {
+    console.groupCollapsed('All Requests');
+    console.table(this.controller?.allRequests);
+    console.groupEnd();
+
+    const csvContent =
+      'data:text/csv;charset=utf-8,' +
+      this.controller?.allResponses
+        .map((e: Uint8Array) => e?.join(','))
+        .join('\n');
+
+    const encodedUri = encodeURI(csvContent);
+    window.open(encodedUri);
+
+    console.groupCollapsed('All Responses');
+    console.table(this.controller?.allResponses);
+    console.groupEnd();
   }
 
   reframe() {

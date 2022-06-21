@@ -12,7 +12,7 @@ export class FlashDataCommand extends ESP32DataPacket {
     this.command = ESP32Command.FLASH_DATA;
 
     const flashDownloadData = new Uint8Array(16 + blockSize);
-    flashDownloadData.fill(0xff);
+    // flashDownloadData.fill(0xff);
 
     const blockSizeView = new DataView(flashDownloadData.buffer, 0, 4);
     const sequenceView = new DataView(flashDownloadData.buffer, 4, 4);
@@ -26,6 +26,7 @@ export class FlashDataCommand extends ESP32DataPacket {
       sequenceNumber * blockSize,
       sequenceNumber * blockSize + blockSize
     );
+    console.log(`BLOCK ${sequenceNumber}`, block);
 
     flashDownloadData.set(block, 16);
     this.data = flashDownloadData;

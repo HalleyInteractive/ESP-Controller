@@ -27,6 +27,9 @@ export class PortController {
   private commandWriter: TransformStream<Uint8Array, Uint8Array> | undefined;
   private slipStreamDecoder: SlipStreamTransformer;
 
+  public allRequests: Uint8Array[] = [];
+  public allResponses: Uint8Array[] = [];
+
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
     this.slipStreamDecoder = new SlipStreamTransformer(
@@ -49,11 +52,11 @@ export class PortController {
 
       this.commandReader = this.commandStream
         .pipeThrough(new TransformStream(this.slipStreamDecoder))
-        .pipeThrough(
-          new TransformStream<Uint8Array, Uint8Array>(
-            new Uint8LoggingTransformer()
-          )
-        )
+        // .pipeThrough(
+        //   new TransformStream<Uint8Array, Uint8Array>(
+        //     new Uint8LoggingTransformer()
+        //   )
+        // )
         .getReader();
 
       const slipStreamEncoder = new TransformStream(
@@ -96,7 +99,7 @@ export class PortController {
   async write(data: Uint8Array) {
     const writer = this.commandWriter?.writable.getWriter();
     await writer?.write(data);
-    console.log('COMMAND WRITTEN', data);
+    this.allRequests.push(data);
     writer?.releaseLock();
   }
 
@@ -106,6 +109,8 @@ export class PortController {
         ?.read()
         .then((responseData: ReadableStreamDefaultReadResult<Uint8Array>) => {
           if (responseData.value) {
+            // console.log('RECEIVED', responseData.value);
+            this.allResponses.push(responseData.value);
             resolve(responseData.value);
           } else {
             reject('NO RESPONSE DATA');
