@@ -1,3 +1,7 @@
+import {BinFilePartion} from './partition';
+import {FlashDataCommand} from './serial/command/FlashData';
+import {SPIFlashBeginCommand} from './serial/command/SPIFlashBegin';
+import {SPISetParamsCommand} from './serial/command/SPISetParams';
 import {
   ESP32Command,
   ESP32DataPacket,
@@ -9,7 +13,7 @@ import {sleep} from './serial/utils/common';
 export class ESP32Controller {
   private controller: PortController | undefined;
   private port: SerialPort | undefined;
-
+  private synced = false;
   constructor() {}
 
   async init() {
@@ -44,6 +48,7 @@ export class ESP32Controller {
       try {
         const response = await this.readResponse(ESP32Command.SYNC);
         console.log('RESPONSE', response);
+        this.synced = true;
         break;
       } catch (error) {
         console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
@@ -86,11 +91,43 @@ export class ESP32Controller {
     console.groupEnd();
   }
 
+  async flashImage() {
+    if (this.synced && this.controller) {
+      const attachCommand = new ESP32DataPacket();
+      attachCommand.command = ESP32Command.SPI_ATTACH;
+      attachCommand.direction = ESP32DataPacketDirection.REQUEST;
+      await this.controller.write(attachCommand.getPacketData());
+
+      const apiParamCMD = new SPISetParamsCommand();
+      await this.controller.write(apiParamCMD.getPacketData());
+
+      const app = new BinFilePartion(0x10000, './bin/simple_arduino.ino.bin');
+      await app.load();
+
+      const flashBeginCMD = new SPIFlashBeginCommand(app.binary, app.offset);
+      await this.controller.write(flashBeginCMD.getPacketData());
+
+      const packetSize = 64 * 1024;
+      const numPackets = Math.ceil(app.binary.length / packetSize);
+
+      for (let i = 0; i < numPackets; i++) {
+        const flashCommand = new FlashDataCommand(app.binary, i, packetSize);
+        await this.controller.write(flashCommand.getPacketData());
+        console.log(`Flashed packet ${i+1} of ${numPackets}`);
+      }
+    }
+  }
+
   async readResponse(cmd: ESP32Command): Promise<ESP32DataPacket> {
     const responsePacket = new ESP32DataPacket();
+    // let reframed = false;
     if (this.controller) {
       const maxAttempts = 10;
       for (let i = 0; i < maxAttempts; i++) {
+        // if (i > maxAttempts / 2 && !reframed) {
+        //   this.reframe();
+        //   reframed = true;
+        // }
         const response = await this.controller?.response(300);
         try {
           responsePacket.parseResponse(response);

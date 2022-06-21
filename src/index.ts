@@ -59,3 +59,9 @@ document.getElementById('btn-chip')?.addEventListener('click', () => {
 document.getElementById('btn-reframe')?.addEventListener('click', () => {
   esp32Controller.reframe();
 });
+
+document.getElementById('btn-flash')?.addEventListener('click', () => {
+  esp32Controller.flashImage().catch(error => {
+    console.log('ERROR', error);
+  });
+});

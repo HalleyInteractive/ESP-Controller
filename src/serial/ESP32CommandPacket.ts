@@ -4,8 +4,22 @@ export enum ESP32DataPacketDirection {
 }
 
 export enum ESP32Command {
+  FLASH_BEGIN = 0x02,
+  FLASH_DATA = 0x03,
+  FLASH_END = 0x04,
+  MEM_BEGIN = 0x05,
+  MEM_END = 0x06,
+  MEM_DATA = 0x07,
   SYNC = 0x08,
+  WRITE_REG = 0x09,
   READ_REG = 0x0a,
+  SPI_SET_PARAMS = 0x0b,
+  SPI_ATTACH = 0x0d,
+  CHANGE_BAUDRATE = 0x0f,
+  FLASH_DEFL_BEGIN = 0x10,
+  FLASH_DEFL_DATA = 0x11,
+  FLASH_DEFL_END = 0x12,
+  SPI_FLASH_MD5 = 0x13,
 }
 
 export class ESP32DataPacket {
@@ -61,10 +75,7 @@ export class ESP32DataPacket {
   }
 
   set data(packetData: Uint8Array) {
-    // TODO: Do I need sequence number and length in data packet?
-    // https://docs.espressif.com/projects/esptool/en/latest/esp32s2/advanced-topics/serial-protocol.html#checksum
     this.size = packetData.length;
-    this.checksum = this.generateChecksum(packetData);
     this.packetData = packetData;
   }
 

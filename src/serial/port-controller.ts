@@ -9,7 +9,6 @@ import {
   SlipStreamTransformDirection,
   SlipStreamTransformer,
 } from 'serial-line-internet-protocol';
-import {ESP32Command, ESP32DataPacket} from './ESP32CommandPacket';
 export class PortController {
   private serialOptions: SerialOptions = {
     baudRate: 115200,
