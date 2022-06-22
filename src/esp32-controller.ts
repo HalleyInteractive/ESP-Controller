@@ -55,7 +55,7 @@ export class ESP32Controller {
       syncCommand.checksum = 0;
       await this.controller?.write(syncCommand.getPacketData());
       try {
-        const response = await this.readResponse(ESP32Command.SYNC, 200);
+        const response = await this.readResponse(ESP32Command.SYNC, 100);
         console.log('SYNCED', response);
         this.synced = true;
         break;
@@ -64,6 +64,9 @@ export class ESP32Controller {
         await sleep(500);
         continue;
       }
+    }
+    if (this.synced) {
+      this.readChipFamily();
     }
   }
 
@@ -187,22 +190,22 @@ export class ESP32Controller {
   }
 
   log() {
-    console.groupCollapsed('All Requests');
-    console.table(this.controller?.allRequests);
-    console.groupEnd();
+    // console.groupCollapsed('All Requests');
+    // console.table(this.controller?.allRequests);
+    // console.groupEnd();
 
     const csvContent =
       'data:text/csv;charset=utf-8,' +
-      this.controller?.allResponses
+      this.controller?.allSerial
         .map((e: Uint8Array) => e?.join(','))
         .join('\n');
 
     const encodedUri = encodeURI(csvContent);
     window.open(encodedUri);
 
-    console.groupCollapsed('All Responses');
-    console.table(this.controller?.allResponses);
-    console.groupEnd();
+    // console.groupCollapsed('All Responses');
+    // console.table(this.controller?.allResponses);
+    // console.groupEnd();
   }
 
   reframe() {

@@ -29,6 +29,7 @@ export class PortController {
 
   public allRequests: Uint8Array[] = [];
   public allResponses: Uint8Array[] = [];
+  public allSerial: Uint8Array[] = [];
 
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
@@ -63,7 +64,13 @@ export class PortController {
         new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
       );
 
-      slipStreamEncoder.readable.pipeTo(this.port.writable);
+      const logingStream = new TransformStream<Uint8Array, Uint8Array>(
+        new Uint8LoggingTransformer('WRITING')
+      );
+
+      slipStreamEncoder.readable.pipeTo(logingStream.writable);
+      logingStream.readable.pipeTo(this.port.writable);
+      // slipStreamEncoder.readable.pipeTo(this.port.writable);
       this.commandWriter = slipStreamEncoder;
 
       this.connected = true;
@@ -100,6 +107,7 @@ export class PortController {
     const writer = this.commandWriter?.writable.getWriter();
     await writer?.write(data);
     this.allRequests.push(data);
+    this.allSerial.push(data);
     writer?.releaseLock();
   }
 
@@ -111,6 +119,7 @@ export class PortController {
           if (responseData.value) {
             // console.log('RECEIVED', responseData.value);
             this.allResponses.push(responseData.value);
+            this.allSerial.push(responseData.value);
             resolve(responseData.value);
           } else {
             reject('NO RESPONSE DATA');

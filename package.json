@@ -41,6 +41,6 @@
     "webpack-dev-server": "^4.9.2"
   },
   "dependencies": {
-    "serial-line-internet-protocol": "^0.1.6"
+    "serial-line-internet-protocol": "^0.1.7"
   }
 }
