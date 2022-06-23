@@ -60,10 +60,6 @@ document.getElementById('btn-reframe')?.addEventListener('click', () => {
   esp32Controller.reframe();
 });
 
-document.getElementById('btn-log')?.addEventListener('click', () => {
-  esp32Controller.log();
-});
-
 document.getElementById('btn-flash')?.addEventListener('click', () => {
   esp32Controller.flashImage().catch(error => {
     console.log('ERROR', error);

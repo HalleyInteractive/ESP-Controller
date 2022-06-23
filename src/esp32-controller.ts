@@ -7,7 +7,7 @@ import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from './serial/ESP32CommandPacket';
+} from './ESP32CommandPacket';
 import {PortController} from './serial/port-controller';
 import {sleep} from './serial/utils/common';
 import {ReadRegCommand} from './serial/command/ReadReg';
@@ -64,9 +64,6 @@ export class ESP32Controller {
         await sleep(500);
         continue;
       }
-    }
-    if (this.synced) {
-      this.readChipFamily();
     }
   }
 
@@ -140,11 +137,7 @@ export class ESP32Controller {
       for (let i = 0; i < numPackets; i++) {
         const flashCommand = new FlashDataCommand(app.binary, i, packetSize);
         await this.controller.write(flashCommand.getPacketData());
-        console.log(
-          `block ${i + 1}/${numPackets}, giving response timeout: ${
-            (30000 * numPackets * packetSize) / 1000000 + 500
-          }`
-        );
+        console.log(`Writing image block ${i + 1}/${numPackets}`);
         await this.readResponse(
           ESP32Command.FLASH_DATA,
           (30000 * numPackets * packetSize) / 1000000 + 500
@@ -158,14 +151,9 @@ export class ESP32Controller {
     timeout = 2000
   ): Promise<ESP32DataPacket> {
     const responsePacket = new ESP32DataPacket();
-    // let reframed = false;
     if (this.controller) {
       const maxAttempts = 10;
       for (let i = 0; i < maxAttempts; i++) {
-        // if (i > maxAttempts / 2 && !reframed) {
-        //   this.reframe();
-        //   reframed = true;
-        // }
         const response = await this.controller?.response(timeout);
         try {
           responsePacket.parseResponse(response);
@@ -187,25 +175,6 @@ export class ESP32Controller {
       }
     }
     return responsePacket;
-  }
-
-  log() {
-    // console.groupCollapsed('All Requests');
-    // console.table(this.controller?.allRequests);
-    // console.groupEnd();
-
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      this.controller?.allSerial
-        .map((e: Uint8Array) => e?.join(','))
-        .join('\n');
-
-    const encodedUri = encodeURI(csvContent);
-    window.open(encodedUri);
-
-    // console.groupCollapsed('All Responses');
-    // console.table(this.controller?.allResponses);
-    // console.groupEnd();
   }
 
   reframe() {

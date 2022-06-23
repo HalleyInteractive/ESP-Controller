@@ -2,7 +2,7 @@ import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from '../ESP32CommandPacket';
+} from '../../ESP32CommandPacket';
 
 export class SPIAttachCommand extends ESP32DataPacket {
   private spiAttachData = new ArrayBuffer(8);

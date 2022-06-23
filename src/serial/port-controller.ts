@@ -1,8 +1,4 @@
-import {
-  LineBreakTransformer,
-  LoggingTransformer,
-  Uint8LoggingTransformer,
-} from './utils/transformers';
+import {LineBreakTransformer, LoggingTransformer} from './utils/transformers';
 import {sleep} from './utils/common';
 
 import {
@@ -27,10 +23,6 @@ export class PortController {
   private commandWriter: TransformStream<Uint8Array, Uint8Array> | undefined;
   private slipStreamDecoder: SlipStreamTransformer;
 
-  public allRequests: Uint8Array[] = [];
-  public allResponses: Uint8Array[] = [];
-  public allSerial: Uint8Array[] = [];
-
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
     this.slipStreamDecoder = new SlipStreamTransformer(
@@ -53,24 +45,13 @@ export class PortController {
 
       this.commandReader = this.commandStream
         .pipeThrough(new TransformStream(this.slipStreamDecoder))
-        // .pipeThrough(
-        //   new TransformStream<Uint8Array, Uint8Array>(
-        //     new Uint8LoggingTransformer()
-        //   )
-        // )
         .getReader();
 
       const slipStreamEncoder = new TransformStream(
         new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
       );
 
-      const logingStream = new TransformStream<Uint8Array, Uint8Array>(
-        new Uint8LoggingTransformer('WRITING')
-      );
-
-      slipStreamEncoder.readable.pipeTo(logingStream.writable);
-      logingStream.readable.pipeTo(this.port.writable);
-      // slipStreamEncoder.readable.pipeTo(this.port.writable);
+      slipStreamEncoder.readable.pipeTo(this.port.writable);
       this.commandWriter = slipStreamEncoder;
 
       this.connected = true;
@@ -88,13 +69,10 @@ export class PortController {
       await this.logStream?.cancel();
       console.log('Disconnected logStream');
 
-      // this.commandReader?.releaseLock();
       await this.commandReader?.cancel();
-      // await this.commandStream?.cancel();
       console.log('Disconnected commandStream');
 
       this.commandWriter?.readable.getReader().releaseLock();
-      // this.commandWriter?.readable.cancel();
 
       await this.port.close();
       console.log('Closed Port');
@@ -106,8 +84,6 @@ export class PortController {
   async write(data: Uint8Array) {
     const writer = this.commandWriter?.writable.getWriter();
     await writer?.write(data);
-    this.allRequests.push(data);
-    this.allSerial.push(data);
     writer?.releaseLock();
   }
 
@@ -117,9 +93,6 @@ export class PortController {
         ?.read()
         .then((responseData: ReadableStreamDefaultReadResult<Uint8Array>) => {
           if (responseData.value) {
-            // console.log('RECEIVED', responseData.value);
-            this.allResponses.push(responseData.value);
-            this.allSerial.push(responseData.value);
             resolve(responseData.value);
           } else {
             reject('NO RESPONSE DATA');

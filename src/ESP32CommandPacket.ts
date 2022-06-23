@@ -99,17 +99,6 @@ export class ESP32DataPacket {
     this.value = responseDataView.getUint32(4, true);
     this.packetData = responsePacket.slice(8);
 
-    // console.groupCollapsed('PARSED RESPONSE');
-    // console.log('RESPONSE', responsePacket);
-    // console.log('DIRECTION', this.direction);
-    // console.log('COMMAND', this.command);
-    // console.log('SIZE', this.size);
-    // console.log('VALUE', this.value);
-    // console.log('DATA', this.packetData);
-    // console.log('STATUS: ', this.status);
-    // console.log('ERROR: ', this.error);
-    // console.groupEnd();
-
     if (this.status === 1) {
       console.log(this.getErrorMessage(this.error));
     }
