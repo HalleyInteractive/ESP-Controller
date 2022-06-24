@@ -16,7 +16,10 @@
 
 'use strict';
 
-import {ESP32Controller} from './esp32-controller';
+import {ESP32Controller} from './esp32/esp32-controller';
+import {ESPImage} from './esp32/esp32-image';
+import {NVSPartition} from './esp32/nvs/nvs-partition';
+import {BinFilePartion} from './partition';
 
 const esp32Controller: ESP32Controller = new ESP32Controller();
 
@@ -57,7 +60,24 @@ document.getElementById('btn-chip')?.addEventListener('click', () => {
 });
 
 document.getElementById('btn-flash')?.addEventListener('click', () => {
-  esp32Controller.flashImage().catch(error => {
+  const esp32Image: ESPImage = new ESPImage();
+  const nvsPartition: NVSPartition = new NVSPartition(
+    0x9000,
+    'NVS Partition',
+    0x6000
+  );
+
+  nvsPartition.writeEntry('test', 'a', 'b');
+
+  esp32Image.partitions.push(nvsPartition);
+  esp32Image.partitions.push(
+    new BinFilePartion(0x8000, 'bin/partition-table.bin')
+  );
+  esp32Image.partitions.push(new BinFilePartion(0x1000, 'bin/bootloader.bin'));
+  esp32Image.partitions.push(
+    new BinFilePartion(0x10000, 'bin/simple_arduino.ino.bin')
+  );
+  esp32Controller.flashImage(esp32Image).catch(error => {
     console.log('ERROR', error);
   });
 });

@@ -2,7 +2,7 @@ import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from '../../ESP32CommandPacket';
+} from './ESP32CommandPacket';
 
 export class SPISetParamsCommand extends ESP32DataPacket {
   private paramsData = new ArrayBuffer(24);

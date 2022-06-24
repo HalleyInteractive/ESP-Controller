@@ -1,16 +1,16 @@
-import {BinFilePartion} from './partition';
-import {FlashDataCommand} from './serial/command/FlashData';
-import {SPIAttachCommand} from './serial/command/SPIAttach';
-import {FlashBeginCommand} from './serial/command/FlashBegin';
-import {SPISetParamsCommand} from './serial/command/SPISetParams';
+import {FlashDataCommand} from './serial-commands/FlashData';
+import {SPIAttachCommand} from './serial-commands/SPIAttach';
+import {FlashBeginCommand} from './serial-commands/FlashBegin';
+import {SPISetParamsCommand} from './serial-commands/SPISetParams';
 import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from './ESP32CommandPacket';
-import {PortController} from './serial/port-controller';
-import {sleep} from './serial/utils/common';
-import {ReadRegCommand} from './serial/command/ReadReg';
+} from './serial-commands/ESP32CommandPacket';
+import {PortController} from '../serial/port-controller';
+import {sleep} from '../utils/common';
+import {ReadRegCommand} from './serial-commands/ReadReg';
+import {ESPImage} from './esp32-image';
 
 enum ChipFamily {
   UNKNOWN = 0,
@@ -18,6 +18,7 @@ enum ChipFamily {
   ESP32 = 2,
   ESP32S2 = 3,
 }
+
 export class ESP32Controller {
   private controller: PortController | undefined;
   private port: SerialPort | undefined;
@@ -110,8 +111,19 @@ export class ESP32Controller {
     }
   }
 
-  async flashImage() {
-    if (this.synced && this.controller) {
+  async flashImage(image: ESPImage) {
+    if (this.controller) {
+      if (!this.synced) {
+        await this.sync();
+        if (!this.synced) {
+          throw new Error(
+            'ESP32 Needs to Sync before flashing a new image. Hold down the `boot` button on the ESP32 during sync attempts.'
+          );
+        }
+      }
+      console.log('Loading binary files');
+      await image.load();
+
       const attachCommand = new SPIAttachCommand();
       await this.controller.write(attachCommand.getPacketData());
       await this.readResponse(ESP32Command.SPI_ATTACH);
@@ -122,34 +134,49 @@ export class ESP32Controller {
       await this.readResponse(ESP32Command.SPI_SET_PARAMS);
       console.log('SPI PARAMS SET');
 
-      const app = new BinFilePartion(0x10000, './bin/simple_arduino.ino.bin');
-      await app.load();
+      for (const partition of image.partitions) {
+        await this.flashBinary(partition);
+      }
 
-      const packetSize = 512;
-      const numPackets = Math.ceil(app.binary.length / packetSize);
+      console.log('Flashing image done, resetting device...');
+      await this.reset();
+    }
+  }
 
-      const flashBeginCMD = new FlashBeginCommand(
-        app.binary,
-        app.offset,
-        packetSize,
-        numPackets
+  async flashBinary(partition: Partition) {
+    console.log(
+      `Flashing partition: ${partition.filename}, offset: ${partition.offset}`
+    );
+    const packetSize = 512;
+    const numPackets = Math.ceil(partition.binary.length / packetSize);
+
+    const flashBeginCMD = new FlashBeginCommand(
+      partition.binary,
+      partition.offset,
+      packetSize,
+      numPackets
+    );
+    await this.controller?.write(flashBeginCMD.getPacketData());
+    await this.readResponse(
+      ESP32Command.FLASH_BEGIN,
+      (30000 * numPackets * packetSize) / 1000000 + 500
+    );
+    console.log('FLASH BEGIN SENT');
+
+    for (let i = 0; i < numPackets; i++) {
+      const flashCommand = new FlashDataCommand(
+        partition.binary,
+        i,
+        packetSize
       );
-      await this.controller.write(flashBeginCMD.getPacketData());
+      await this.controller?.write(flashCommand.getPacketData());
+      console.log(
+        `[${partition.filename}] Writing block ${i + 1}/${numPackets}`
+      );
       await this.readResponse(
-        ESP32Command.FLASH_BEGIN,
+        ESP32Command.FLASH_DATA,
         (30000 * numPackets * packetSize) / 1000000 + 500
       );
-      console.log('FLASH BEGIN SENT');
-
-      for (let i = 0; i < numPackets; i++) {
-        const flashCommand = new FlashDataCommand(app.binary, i, packetSize);
-        await this.controller.write(flashCommand.getPacketData());
-        console.log(`Writing image block ${i + 1}/${numPackets}`);
-        await this.readResponse(
-          ESP32Command.FLASH_DATA,
-          (30000 * numPackets * packetSize) / 1000000 + 500
-        );
-      }
     }
   }
 

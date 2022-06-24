@@ -1,5 +1,8 @@
-import {LineBreakTransformer, LoggingTransformer} from './utils/transformers';
-import {sleep} from './utils/common';
+import {
+  LineBreakTransformer,
+  LoggingTransformer,
+} from '../utils/stream-transformers';
+import {sleep} from '../utils/common';
 
 import {
   SlipStreamTransformDirection,

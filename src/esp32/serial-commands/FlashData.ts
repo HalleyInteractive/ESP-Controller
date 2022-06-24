@@ -2,7 +2,7 @@ import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from '../../ESP32CommandPacket';
+} from './ESP32CommandPacket';
 
 export class FlashDataCommand extends ESP32DataPacket {
   constructor(image: Uint8Array, sequenceNumber: number, blockSize: number) {
