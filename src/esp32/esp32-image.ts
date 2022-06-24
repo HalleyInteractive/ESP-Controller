@@ -1,18 +1,36 @@
+/**
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {BinFilePartion} from './bin-file-partition';
-import {NVSPartition} from './nvs/nvs-partition';
 
 export class ESPImage {
   partitions: Array<Partition> = [];
 
   constructor() {}
 
-  addDefault() {
-    this.partitions.push(new NVSPartition(0x9000, 'NVS Partition', 0x6000));
-    this.partitions.push(new BinFilePartion(0x8000, 'bin/partition-table.bin'));
-    this.partitions.push(new BinFilePartion(0x1000, 'bin/bootloader.bin'));
-    this.partitions.push(
-      new BinFilePartion(0x10000, 'bin/simple_arduino.ino.bin')
-    );
+  addBootloader(fileName: string) {
+    this.partitions.push(new BinFilePartion(0x1000, fileName));
+  }
+
+  addPartitionTable(fileName: string) {
+    this.partitions.push(new BinFilePartion(0x8000, fileName));
+  }
+
+  addApp(fileName: string) {
+    this.partitions.push(new BinFilePartion(0x10000, fileName));
   }
 
   addPartition(partition: Partition) {

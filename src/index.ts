@@ -70,13 +70,9 @@ document.getElementById('btn-flash')?.addEventListener('click', () => {
   nvsPartition.writeEntry('test', 'a', 'b');
 
   esp32Image.partitions.push(nvsPartition);
-  esp32Image.partitions.push(
-    new BinFilePartion(0x8000, 'bin/partition-table.bin')
-  );
-  esp32Image.partitions.push(new BinFilePartion(0x1000, 'bin/bootloader.bin'));
-  esp32Image.partitions.push(
-    new BinFilePartion(0x10000, 'bin/simple_arduino.ino.bin')
-  );
+  esp32Image.addBootloader('bin/bootloader.bin');
+  esp32Image.addPartitionTable('bin/partition-table.bin');
+  esp32Image.addApp('bin/simple_arduino.ino.bin');
   esp32Controller.flashImage(esp32Image).catch(error => {
     console.log('ERROR', error);
   });

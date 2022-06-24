@@ -5,6 +5,9 @@
   "engines": {
     "node": ">=11.0.0"
   },
+  "directories": {
+    "test": "test"
+  },
   "main": "dist/index.html",
   "types": "",
   "files": [
@@ -25,22 +28,20 @@
     "start": "webpack serve --open"
   },
   "devDependencies": {
-    "@babel/core": "^7.16.12",
-    "@babel/preset-env": "^7.16.11",
-    "@babel/preset-typescript": "^7.16.7",
-    "@types/jest": "^27.4.0",
-    "@types/node": "^17.0.24",
-    "babel-jest": "^27.4.6",
+    "@babel/preset-env": "^7.18.2",
+    "@babel/preset-typescript": "^7.17.12",
+    "@jest/types": "^28.1.1",
+    "@types/jest": "^28.1.0",
+    "@types/node": "^18.0.0",
+    "babel-jest": "^28.1.1",
     "gts": "^3.1.0",
     "html-webpack-plugin": "^5.5.0",
-    "jest": "^27.4.7",
-    "ts-loader": "^9.2.8",
+    "jest": "^28.1.1",
+    "ts-loader": "^9.3.0",
+    "ts-node": "^10.8.1",
     "typescript": "^4.5.5",
-    "webpack": "^5.72.0",
-    "webpack-cli": "^4.9.2",
+    "webpack": "^5.73.0",
+    "webpack-cli": "^4.10.0",
     "webpack-dev-server": "^4.9.2"
-  },
-  "dependencies": {
-    "serial-line-internet-protocol": "^0.1.7"
   }
 }

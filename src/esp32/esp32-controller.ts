@@ -1,3 +1,19 @@
+/**
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 import {FlashDataCommand} from './serial-commands/FlashData';
 import {SPIAttachCommand} from './serial-commands/SPIAttach';
 import {FlashBeginCommand} from './serial-commands/FlashBegin';
@@ -18,7 +34,6 @@ enum ChipFamily {
   ESP32 = 2,
   ESP32S2 = 3,
 }
-
 export class ESP32Controller {
   private controller: PortController | undefined;
   private port: SerialPort | undefined;
@@ -180,7 +195,7 @@ export class ESP32Controller {
     }
   }
 
-  async readResponse(
+  private async readResponse(
     cmd: ESP32Command,
     timeout = 2000
   ): Promise<ESP32DataPacket> {
@@ -219,4 +234,10 @@ export class ESP32Controller {
   get portConnected() {
     return this.controller?.connected;
   }
+
+  get espSynced() {
+    return this.synced;
+  }
+
+  subscribeToLogs(handler: Function) {}
 }
