@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 
-import {FlashDataCommand} from './serial-commands/FlashData';
-import {SPIAttachCommand} from './serial-commands/SPIAttach';
-import {FlashBeginCommand} from './serial-commands/FlashBegin';
-import {SPISetParamsCommand} from './serial-commands/SPISetParams';
+import {FlashDataCommand} from './esp32/commands/FlashData';
+import {SPIAttachCommand} from './esp32/commands/SPIAttach';
+import {FlashBeginCommand} from './esp32/commands/FlashBegin';
+import {SPISetParamsCommand} from './esp32/commands/SPISetParams';
 import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from './serial-commands/ESP32CommandPacket';
-import {PortController} from '../serial/port-controller';
-import {sleep} from '../utils/common';
-import {ReadRegCommand} from './serial-commands/ReadReg';
-import {ESPImage} from './esp32-image';
+} from './esp32/commands/ESP32CommandPacket';
+import {PortController} from './serial/port-controller';
+import {sleep} from './utils/common';
+import {ReadRegCommand} from './esp32/commands/ReadReg';
+import {ESPImage} from './esp32/esp32-image';
 
 enum ChipFamily {
   UNKNOWN = 0,
@@ -39,6 +39,10 @@ export class ESP32Controller {
   private port: SerialPort | undefined;
   private synced = false;
   private chipFamily: ChipFamily = 0;
+
+  serialPrintEventListeners: Set<Function> = new Set();
+  commandEventListeners: Set<Function> = new Set();
+
   constructor() {}
 
   async init() {
@@ -46,7 +50,32 @@ export class ESP32Controller {
     if (this.port) {
       this.synced = false;
       this.controller = new PortController(this.port);
-      this.controller.connect();
+      await this.controller.connect();
+      this.logStreamReader();
+      this.commandStreamReader();
+      this.serialPrintEventListeners.add((log: string | undefined) => {
+        console.log(log);
+      });
+    }
+  }
+
+  async logStreamReader() {
+    if (this?.controller?.connected) {
+      for await (const log of this.controller?.logStream()) {
+        for (const listener of this.serialPrintEventListeners) {
+          listener(log);
+        }
+      }
+    }
+  }
+
+  async commandStreamReader() {
+    if (this?.controller?.connected) {
+      for await (const command of this.controller?.commandStream()) {
+        for (const listener of this.commandEventListeners) {
+          listener(command);
+        }
+      }
     }
   }
 
@@ -77,12 +106,13 @@ export class ESP32Controller {
       ]);
       syncCommand.checksum = 0;
       await this.controller?.write(syncCommand.getPacketData());
+
       try {
         const response = await this.readResponse(ESP32Command.SYNC, 100);
         console.log('SYNCED', response);
         this.synced = true;
         break;
-      } catch (error) {
+      } catch (e) {
         console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
         await sleep(500);
         continue;
@@ -195,35 +225,38 @@ export class ESP32Controller {
     }
   }
 
-  private async readResponse(
+  private readResponse(
     cmd: ESP32Command,
-    timeout = 2000
-  ): Promise<ESP32DataPacket> {
-    const responsePacket = new ESP32DataPacket();
-    if (this.controller) {
-      const maxAttempts = 10;
-      for (let i = 0; i < maxAttempts; i++) {
-        const response = await this.controller?.response(timeout);
+    timeout: number = 2000
+  ): Promise<ESP32DataPacket | null> {
+    return new Promise((resolve, reject) => {
+      const eventListener = (command: Uint8Array) => {
+        const responsePacket = new ESP32DataPacket();
         try {
-          responsePacket.parseResponse(response);
+          responsePacket.parseResponse(command);
         } catch (error) {
           console.log('Incorrect packet response', error);
-          continue;
+          return;
         }
 
         if (responsePacket.direction !== ESP32DataPacketDirection.RESPONSE) {
           console.log('Incorrect packet direction');
-          continue;
+          return;
         }
 
         if (responsePacket.command !== cmd) {
           console.log('Incorrect response command');
-          continue;
+          return;
         }
-        return responsePacket;
-      }
-    }
-    return responsePacket;
+        this.commandEventListeners.delete(eventListener);
+        resolve(responsePacket);
+      };
+      this.commandEventListeners.add(eventListener);
+      sleep(timeout).then(() => {
+        this.commandEventListeners.delete(eventListener);
+        reject('timeout');
+      });
+    });
   }
 
   async reset() {
@@ -238,6 +271,4 @@ export class ESP32Controller {
   get espSynced() {
     return this.synced;
   }
-
-  subscribeToLogs(handler: Function) {}
 }

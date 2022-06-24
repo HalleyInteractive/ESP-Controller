@@ -4,11 +4,12 @@
     "rootDir": ".",
     "outDir": "build",
     "lib": [
-      "ESNext",
-      "dom"
+      "esnext",
+      "dom",
+      "esnext.asynciterable"
     ],
-    "module": "ES2022",
-    "target": "ES2022",
+    "module": "esnext",
+    "target": "esnext",
     "moduleResolution": "Node"
   },
   "include": [

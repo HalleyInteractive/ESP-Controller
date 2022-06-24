@@ -35,19 +35,20 @@ export class PortController {
   };
 
   connected: Boolean = false;
-  private logStream:
-    | ReadableStream<string>
-    | ReadableStream<Uint8Array>
-    | undefined;
+  // private logStream:
+  //   | ReadableStream<string>
+  //   | ReadableStream<Uint8Array>
+  //   | undefined;
   private logReader: ReadableStreamDefaultReader<string> | undefined;
-  private commandStream: ReadableStream<Uint8Array> | undefined;
-  private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  // private commandStream: ReadableStream<Uint8Array> | undefined;
+  // private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   private slipStreamDecoder: TransformStream<Uint8Array, Uint8Array>;
   private slipStreamEncoder: TransformStream<Uint8Array, Uint8Array>;
   private textDecoder: TextDecoderStream;
   private lineBreakTransformer: TransformStream<string, string>;
   private loggingTransfomer: TransformStream<string, string>;
   private abortStreamController: AbortController | undefined;
+  private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
@@ -79,16 +80,15 @@ export class PortController {
       };
 
       await this.port.open(this.serialOptions);
-      [this.logStream, this.commandStream] = this.port.readable.tee();
-      this.logStream = this.logStream
+      const [stream1, stream2] = this.port.readable.tee();
+      // this.logStream = this.logStream
+      this.logReader = stream1
         .pipeThrough(this.textDecoder, streamPipeOptions)
         .pipeThrough(this.lineBreakTransformer, streamPipeOptions)
-        .pipeThrough(this.loggingTransfomer, streamPipeOptions);
+        .getReader();
 
-      this.logReader = this.logStream.getReader();
-      this.logReader.read().then(this.processStream.bind(this));
-
-      this.commandReader = this.commandStream
+      // this.logReader = this.logStream.getReader();
+      this.commandReader = stream2
         .pipeThrough(this.slipStreamDecoder, streamPipeOptions)
         .getReader();
 
@@ -121,24 +121,24 @@ export class PortController {
     writer?.releaseLock();
   }
 
-  async response(timeout: number): Promise<Uint8Array> {
-    const responsePromise = new Promise<Uint8Array>((resolve, reject) => {
-      this.commandReader
-        ?.read()
-        .then((responseData: ReadableStreamDefaultReadResult<Uint8Array>) => {
-          if (responseData.value) {
-            resolve(responseData.value);
-          } else {
-            reject('NO RESPONSE DATA');
-          }
-        });
-      sleep(timeout).then(() => {
-        reject('TIMEOUT');
-      });
-    });
+  // async response(timeout: number): Promise<Uint8Array> {
+  //   const responsePromise = new Promise<Uint8Array>((resolve, reject) => {
+  //     this.commandReader
+  //       ?.read()
+  //       .then((responseData: ReadableStreamDefaultReadResult<Uint8Array>) => {
+  //         if (responseData.value) {
+  //           resolve(responseData.value);
+  //         } else {
+  //           reject('NO RESPONSE DATA');
+  //         }
+  //       });
+  //     sleep(timeout).then(() => {
+  //       reject('TIMEOUT');
+  //     });
+  //   });
 
-    return responsePromise;
-  }
+  //   return responsePromise;
+  // }
 
   async resetPulse() {
     this.port.setSignals({dataTerminalReady: false, readyToSend: true});
@@ -147,14 +147,27 @@ export class PortController {
     await sleep(50);
   }
 
-  processStream(
-    result: ReadableStreamDefaultReadResult<string>
-  ): Promise<ReadableStreamDefaultReadValueResult<string> | undefined> {
-    if (!result?.done && this?.logReader && this.connected) {
-      return this.logReader?.read().then(this.processStream.bind(this));
+  async *logStream() {
+    try {
+      while (true) {
+        const result = await this.logReader?.read();
+        if (result?.done || !this.connected) return;
+        yield result?.value;
+      }
+    } finally {
+      this.logReader?.releaseLock();
     }
-    return new Promise(resolve => {
-      resolve(undefined);
-    });
+  }
+
+  async *commandStream() {
+    try {
+      while (true) {
+        const result = await this.commandReader?.read();
+        if (result?.done || !this.connected) return;
+        yield result?.value;
+      }
+    } finally {
+      this.commandReader?.releaseLock();
+    }
   }
 }

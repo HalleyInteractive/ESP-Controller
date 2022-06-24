@@ -16,10 +16,9 @@
 
 'use strict';
 
-import {ESP32Controller} from './esp32/esp32-controller';
+import {ESP32Controller} from './esp32-controller';
 import {ESPImage} from './esp32/esp32-image';
 import {NVSPartition} from './esp32/nvs/nvs-partition';
-import {BinFilePartion} from './partition';
 
 const esp32Controller: ESP32Controller = new ESP32Controller();
 
