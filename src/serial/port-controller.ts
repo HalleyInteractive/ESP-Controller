@@ -16,18 +16,34 @@ export class PortController {
   };
 
   connected: Boolean = false;
-  private logStream: ReadableStream<string> | undefined;
+  private logStream:
+    | ReadableStream<string>
+    | ReadableStream<Uint8Array>
+    | undefined;
   private logReader: ReadableStreamDefaultReader<string> | undefined;
   private commandStream: ReadableStream<Uint8Array> | undefined;
   private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
-  private commandWriter: TransformStream<Uint8Array, Uint8Array> | undefined;
-  private slipStreamDecoder: SlipStreamTransformer;
+  private slipStreamDecoder: TransformStream<Uint8Array, Uint8Array>;
+  private slipStreamEncoder: TransformStream<Uint8Array, Uint8Array>;
+  private textDecoder: TextDecoderStream;
+  private lineBreakTransformer: TransformStream<string, string>;
+  private loggingTransfomer: TransformStream<string, string>;
+  private abortStreamController: AbortController | undefined;
 
   constructor(private readonly port: SerialPort) {
     console.log('New Controller');
-    this.slipStreamDecoder = new SlipStreamTransformer(
-      SlipStreamTransformDirection.Decoding,
-      true
+    this.slipStreamDecoder = new TransformStream(
+      new SlipStreamTransformer(SlipStreamTransformDirection.Decoding, true)
+    );
+    this.slipStreamEncoder = new TransformStream(
+      new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
+    );
+    this.textDecoder = new TextDecoderStream();
+    this.lineBreakTransformer = new TransformStream<string, string>(
+      new LineBreakTransformer()
+    );
+    this.loggingTransfomer = new TransformStream<string, string>(
+      new LoggingTransformer()
     );
   }
 
@@ -35,54 +51,53 @@ export class PortController {
     if (!this.connected) {
       console.log('Controller connect to port');
 
+      this.abortStreamController = new AbortController();
+      const streamPipeOptions = {
+        signal: this.abortStreamController.signal,
+        preventCancel: false,
+        preventClose: false,
+        preventAbort: false,
+      };
+
       await this.port.open(this.serialOptions);
-      const [stream1, stream2] = this.port.readable.tee();
-      this.logStream = this.setupLogStream(stream1);
+      [this.logStream, this.commandStream] = this.port.readable.tee();
+      this.logStream = this.logStream
+        .pipeThrough(this.textDecoder, streamPipeOptions)
+        .pipeThrough(this.lineBreakTransformer, streamPipeOptions)
+        .pipeThrough(this.loggingTransfomer, streamPipeOptions);
+
       this.logReader = this.logStream.getReader();
       this.logReader.read().then(this.processStream.bind(this));
 
-      this.commandStream = stream2;
-
       this.commandReader = this.commandStream
-        .pipeThrough(new TransformStream(this.slipStreamDecoder))
+        .pipeThrough(this.slipStreamDecoder, streamPipeOptions)
         .getReader();
 
-      const slipStreamEncoder = new TransformStream(
-        new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
+      this.slipStreamEncoder.readable.pipeTo(
+        this.port.writable,
+        streamPipeOptions
       );
-
-      slipStreamEncoder.readable.pipeTo(this.port.writable);
-      this.commandWriter = slipStreamEncoder;
 
       this.connected = true;
     }
   }
 
   reframe() {
-    this.slipStreamDecoder.reFrame();
+    // this.slipStreamDecoder.reFrame();
   }
 
   async disconnect() {
     if (this.connected) {
-      await this.logReader?.cancel();
-      this.logReader?.releaseLock();
-      await this.logStream?.cancel();
-      console.log('Disconnected logStream');
-
-      await this.commandReader?.cancel();
-      console.log('Disconnected commandStream');
-
-      this.commandWriter?.readable.getReader().releaseLock();
-
-      await this.port.close();
-      console.log('Closed Port');
-
       this.connected = false;
+      this.abortStreamController?.abort('User disconnects');
+      await this.commandReader?.releaseLock();
+      await this.logReader?.releaseLock();
+      await this.port.close();
     }
   }
 
   async write(data: Uint8Array) {
-    const writer = this.commandWriter?.writable.getWriter();
+    const writer = this.slipStreamEncoder?.writable.getWriter();
     await writer?.write(data);
     writer?.releaseLock();
   }
@@ -111,17 +126,6 @@ export class PortController {
     await sleep(100);
     this.port.setSignals({dataTerminalReady: true, readyToSend: false});
     await sleep(50);
-  }
-
-  setupLogStream(stream: ReadableStream<Uint8Array>): ReadableStream<string> {
-    return stream
-      .pipeThrough(new TextDecoderStream())
-      .pipeThrough(
-        new TransformStream<string, string>(new LineBreakTransformer())
-      )
-      .pipeThrough(
-        new TransformStream<string, string>(new LoggingTransformer())
-      );
   }
 
   processStream(

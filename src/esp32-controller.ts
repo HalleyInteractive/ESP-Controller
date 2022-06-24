@@ -28,16 +28,23 @@ export class ESP32Controller {
   async init() {
     this.port = await navigator.serial.requestPort();
     if (this.port) {
+      this.synced = false;
       this.controller = new PortController(this.port);
       this.controller.connect();
     }
   }
 
   async stop() {
-    await this.controller?.disconnect();
+    try {
+      await this.controller?.disconnect();
+    } catch (e) {
+      console.log('Diconnect error');
+      console.log(e);
+    }
     if (!this.controller?.connected) {
       this.port = undefined;
     }
+    this.synced = false;
   }
 
   async sync() {
@@ -177,11 +184,8 @@ export class ESP32Controller {
     return responsePacket;
   }
 
-  reframe() {
-    this.controller?.reframe();
-  }
-
   async reset() {
+    this.synced = false;
     this.controller?.resetPulse();
   }
 
