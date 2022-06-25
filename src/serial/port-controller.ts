@@ -81,13 +81,12 @@ export class PortController {
 
       await this.port.open(this.serialOptions);
       const [stream1, stream2] = this.port.readable.tee();
-      // this.logStream = this.logStream
+
       this.logReader = stream1
         .pipeThrough(this.textDecoder, streamPipeOptions)
         .pipeThrough(this.lineBreakTransformer, streamPipeOptions)
         .getReader();
 
-      // this.logReader = this.logStream.getReader();
       this.commandReader = stream2
         .pipeThrough(this.slipStreamDecoder, streamPipeOptions)
         .getReader();
@@ -108,7 +107,8 @@ export class PortController {
   async disconnect() {
     if (this.connected) {
       this.connected = false;
-      this.abortStreamController?.abort('User disconnects');
+      await sleep(1000);
+      // this.abortStreamController?.abort('User disconnects');
       await this.commandReader?.releaseLock();
       await this.logReader?.releaseLock();
       await this.port.close();
@@ -121,25 +121,6 @@ export class PortController {
     writer?.releaseLock();
   }
 
-  // async response(timeout: number): Promise<Uint8Array> {
-  //   const responsePromise = new Promise<Uint8Array>((resolve, reject) => {
-  //     this.commandReader
-  //       ?.read()
-  //       .then((responseData: ReadableStreamDefaultReadResult<Uint8Array>) => {
-  //         if (responseData.value) {
-  //           resolve(responseData.value);
-  //         } else {
-  //           reject('NO RESPONSE DATA');
-  //         }
-  //       });
-  //     sleep(timeout).then(() => {
-  //       reject('TIMEOUT');
-  //     });
-  //   });
-
-  //   return responsePromise;
-  // }
-
   async resetPulse() {
     this.port.setSignals({dataTerminalReady: false, readyToSend: true});
     await sleep(100);
@@ -149,9 +130,9 @@ export class PortController {
 
   async *logStream() {
     try {
-      while (true) {
+      while (this.connected) {
         const result = await this.logReader?.read();
-        if (result?.done || !this.connected) return;
+        if (result?.done) return;
         yield result?.value;
       }
     } finally {
@@ -161,9 +142,9 @@ export class PortController {
 
   async *commandStream() {
     try {
-      while (true) {
+      while (this.connected) {
         const result = await this.commandReader?.read();
-        if (result?.done || !this.connected) return;
+        if (result?.done) return;
         yield result?.value;
       }
     } finally {
