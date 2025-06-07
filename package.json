@@ -1,0 +1,55 @@
+{
+  "name": "esp-controller",
+  "version": "1.0.0",
+  "description": "Typescript package for connecting and flashing images to your ESP device.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint 'src/**/*.ts'",
+    "lint:fix": "eslint 'src/**/*.ts' --fix",
+    "build": "tsup"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HalleyInteractive/esp-controller.git"
+  },
+  "keywords": [
+    "esp",
+    "espressif",
+    "esp32",
+    "esp-32"
+  ],
+  "author": "Niels Overwijn",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/HalleyInteractive/esp-controller/issues"
+  },
+  "homepage": "https://github.com/HalleyInteractive/esp-controller#readme",
+  "dependencies": {
+    "@eslint/js": "^9.28.0",
+    "eslint": "^9.28.0",
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.1",
+    "prettier": "^3.5.3",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.1",
+    "vitest": "^3.2.2"
+  }
+}
