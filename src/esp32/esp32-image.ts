@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {BinFilePartion} from './bin-file-partition';
+import { BinFilePartion } from "./bin-file-partition";
 
 export class ESPImage {
   partitions: Array<Partition> = [];

@@ -123,21 +123,21 @@ export class ESP32DataPacket {
   getErrorMessage(error: number): string {
     switch (error) {
       case 0x05:
-        return 'Status Error: Received message is invalid. (parameters or length field is invalid)';
+        return "Status Error: Received message is invalid. (parameters or length field is invalid)";
       case 0x06:
-        return 'Failed to act on received message';
+        return "Failed to act on received message";
       case 0x07:
-        return 'Invalid CRC in message';
+        return "Invalid CRC in message";
       case 0x08:
         return "flash write error - after writing a block of data to flash, the ROM loader reads the value back and the 8-bit CRC is compared to the data read from flash. If they don't match, this error is returned.";
       case 0x09:
-        return 'flash read error - SPI read failed';
+        return "flash read error - SPI read failed";
       case 0x0a:
-        return 'flash read length error - SPI read request length is too long';
+        return "flash read length error - SPI read request length is too long";
       case 0x0b:
-        return 'Deflate error (compressed uploads only)';
+        return "Deflate error (compressed uploads only)";
       default:
-        return 'No error status for response';
+        return "No error status for response";
     }
   }
 

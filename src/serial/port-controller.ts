@@ -17,24 +17,24 @@
 import {
   LineBreakTransformer,
   LoggingTransformer,
-} from '../utils/stream-transformers';
-import {sleep} from '../utils/common';
+} from "../utils/stream-transformers";
+import { sleep } from "../utils/common";
 
 import {
   SlipStreamTransformDirection,
   SlipStreamTransformer,
-} from './slip-protocol';
+} from "./slip-protocol";
 export class PortController {
   private serialOptions: SerialOptions = {
     baudRate: 115200,
     dataBits: 8,
     stopBits: 1,
     bufferSize: 255,
-    parity: 'none',
-    flowControl: 'none',
+    parity: "none",
+    flowControl: "none",
   };
 
-  connected: Boolean = false;
+  connected: boolean = false;
   // private logStream:
   //   | ReadableStream<string>
   //   | ReadableStream<Uint8Array>
@@ -51,25 +51,25 @@ export class PortController {
   private commandReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
   constructor(private readonly port: SerialPort) {
-    console.log('New Controller');
+    console.log("New Controller");
     this.slipStreamDecoder = new TransformStream(
-      new SlipStreamTransformer(SlipStreamTransformDirection.Decoding, true)
+      new SlipStreamTransformer(SlipStreamTransformDirection.Decoding, true),
     );
     this.slipStreamEncoder = new TransformStream(
-      new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
+      new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true),
     );
     this.textDecoder = new TextDecoderStream();
     this.lineBreakTransformer = new TransformStream<string, string>(
-      new LineBreakTransformer()
+      new LineBreakTransformer(),
     );
     this.loggingTransfomer = new TransformStream<string, string>(
-      new LoggingTransformer()
+      new LoggingTransformer(),
     );
   }
 
   async connect(): Promise<void> {
     if (!this.connected) {
-      console.log('Controller connect to port');
+      console.log("Controller connect to port");
 
       this.abortStreamController = new AbortController();
       const streamPipeOptions = {
@@ -93,7 +93,7 @@ export class PortController {
 
       this.slipStreamEncoder.readable.pipeTo(
         this.port.writable,
-        streamPipeOptions
+        streamPipeOptions,
       );
 
       this.connected = true;
@@ -122,9 +122,9 @@ export class PortController {
   }
 
   async resetPulse() {
-    this.port.setSignals({dataTerminalReady: false, readyToSend: true});
+    this.port.setSignals({ dataTerminalReady: false, readyToSend: true });
     await sleep(100);
-    this.port.setSignals({dataTerminalReady: true, readyToSend: false});
+    this.port.setSignals({ dataTerminalReady: true, readyToSend: false });
     await sleep(50);
   }
 

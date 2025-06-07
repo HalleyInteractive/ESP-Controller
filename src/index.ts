@@ -40,10 +40,11 @@ export class ESP32Controller {
   private synced = false;
   private chipFamily: ChipFamily = 0;
 
-  serialPrintEventListeners: Set<Function> = new Set();
-  commandEventListeners: Set<Function> = new Set();
-
-  constructor() {}
+  serialPrintEventListeners: Set<(string: string | undefined) => void> =
+    new Set();
+  commandEventListeners: Set<
+    (command: Uint8Array<ArrayBufferLike> | undefined) => void
+  > = new Set();
 
   async init() {
     this.port = await navigator.serial.requestPort();
@@ -61,7 +62,7 @@ export class ESP32Controller {
 
   async logStreamReader() {
     if (this?.controller?.connected) {
-      for await (const log of this.controller?.logStream()) {
+      for await (const log of this.controller.logStream()) {
         for (const listener of this.serialPrintEventListeners) {
           listener(log);
         }
@@ -71,7 +72,7 @@ export class ESP32Controller {
 
   async commandStreamReader() {
     if (this?.controller?.connected) {
-      for await (const command of this.controller?.commandStream()) {
+      for await (const command of this.controller.commandStream()) {
         for (const listener of this.commandEventListeners) {
           listener(command);
         }
@@ -113,7 +114,7 @@ export class ESP32Controller {
         this.synced = true;
         break;
       } catch (e) {
-        console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
+        console.log(`Sync attempt ${i + 1} of ${maxAttempts}: ${e}`);
         await sleep(500);
         continue;
       }
@@ -162,7 +163,7 @@ export class ESP32Controller {
         await this.sync();
         if (!this.synced) {
           throw new Error(
-            "ESP32 Needs to Sync before flashing a new image. Hold down the `boot` button on the ESP32 during sync attempts."
+            "ESP32 Needs to Sync before flashing a new image. Hold down the `boot` button on the ESP32 during sync attempts.",
           );
         }
       }
@@ -190,7 +191,7 @@ export class ESP32Controller {
 
   async flashBinary(partition: Partition) {
     console.log(
-      `Flashing partition: ${partition.filename}, offset: ${partition.offset}`
+      `Flashing partition: ${partition.filename}, offset: ${partition.offset}`,
     );
     const packetSize = 512;
     const numPackets = Math.ceil(partition.binary.length / packetSize);
@@ -199,12 +200,12 @@ export class ESP32Controller {
       partition.binary,
       partition.offset,
       packetSize,
-      numPackets
+      numPackets,
     );
     await this.controller?.write(flashBeginCMD.getPacketData());
     await this.readResponse(
       ESP32Command.FLASH_BEGIN,
-      (30000 * numPackets * packetSize) / 1000000 + 500
+      (30000 * numPackets * packetSize) / 1000000 + 500,
     );
     console.log("FLASH BEGIN SENT");
 
@@ -212,22 +213,22 @@ export class ESP32Controller {
       const flashCommand = new FlashDataCommand(
         partition.binary,
         i,
-        packetSize
+        packetSize,
       );
       await this.controller?.write(flashCommand.getPacketData());
       console.log(
-        `[${partition.filename}] Writing block ${i + 1}/${numPackets}`
+        `[${partition.filename}] Writing block ${i + 1}/${numPackets}`,
       );
       await this.readResponse(
         ESP32Command.FLASH_DATA,
-        (30000 * numPackets * packetSize) / 1000000 + 500
+        (30000 * numPackets * packetSize) / 1000000 + 500,
       );
     }
   }
 
   private readResponse(
     cmd: ESP32Command,
-    timeout: number = 2000
+    timeout: number = 2000,
   ): Promise<ESP32DataPacket | null> {
     return new Promise((resolve, reject) => {
       const eventListener = (command: Uint8Array) => {

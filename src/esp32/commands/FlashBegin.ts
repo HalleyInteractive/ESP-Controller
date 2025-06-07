@@ -18,7 +18,7 @@ import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from './ESP32CommandPacket';
+} from "./ESP32CommandPacket";
 
 export class FlashBeginCommand extends ESP32DataPacket {
   private flashBeginData = new ArrayBuffer(16);
@@ -31,7 +31,7 @@ export class FlashBeginCommand extends ESP32DataPacket {
     image: Uint8Array,
     offset: number,
     packetSize: number,
-    numPackets: number
+    numPackets: number,
   ) {
     super();
 

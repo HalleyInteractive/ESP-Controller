@@ -35,5 +35,5 @@ export class NVSSettings {
   static readonly PAGE_ACTIVE: number = 0xfffffffe;
   static readonly PAGE_FULL: number = 0xfffffffc;
   static readonly NVS_VERSION: number = 0xfe;
-  static readonly DEFAULT_NAMESPACE: string = 'storage';
+  static readonly DEFAULT_NAMESPACE: string = "storage";
 }

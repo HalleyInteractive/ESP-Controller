@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import {crc32} from '../../utils/crc32';
+import { crc32 } from "../../utils/crc32";
 
 const NVS_BLOCK_SIZE = 32;
 
@@ -54,16 +54,16 @@ export class NvsEntry implements NvsKeyValue {
   entriesNeeded = 0;
 
   constructor(entry: NvsKeyValue) {
-    console.log('NEW ENTRY', entry);
+    console.log("NEW ENTRY", entry);
 
     this.namespace = entry.namespace;
     this.type = entry.type;
-    this.key = entry.key += '\0';
+    this.key = entry.key += "\0";
     this.data = entry.data;
 
     if (entry.key.length > 16) {
       throw Error(
-        `NVS max key length is 15, received ${entry.key} of length ${entry.key.length}`
+        `NVS max key length is 15, received ${entry.key} of length ${entry.key.length}`,
       );
     }
 
@@ -72,12 +72,12 @@ export class NvsEntry implements NvsKeyValue {
     this.headerType = new Uint8Array(this.headerBuffer.buffer, 1, 1);
     this.headerSpan = new Uint8Array(this.headerBuffer.buffer, 2, 1);
     this.headerChunkIndex = new Uint8Array(this.headerBuffer.buffer, 3, 1).fill(
-      0xff
+      0xff,
     );
     this.headerCRC32 = new Uint8Array(this.headerBuffer.buffer, 4, 4);
     this.headerKey = new Uint8Array(this.headerBuffer.buffer, 8, 16);
     this.headerData = new Uint8Array(this.headerBuffer.buffer, 24, 8).fill(
-      0xff
+      0xff,
     );
     this.headerDataSize = new Uint8Array(this.headerBuffer.buffer, 24, 4);
     this.headerDataCRC32 = new Uint8Array(this.headerBuffer.buffer, 28, 4);
@@ -98,22 +98,22 @@ export class NvsEntry implements NvsKeyValue {
   }
 
   private setEntryData() {
-    if (typeof this.data === 'string') {
+    if (typeof this.data === "string") {
       this.setStringEntry();
-    } else if (typeof this.data === 'number') {
+    } else if (typeof this.data === "number") {
       this.setPrimitiveEntry();
     }
   }
 
   private setStringEntry() {
-    if (typeof this.data === 'string') {
-      this.data += '\0'; // Adding null terminator.
+    if (typeof this.data === "string") {
+      this.data += "\0"; // Adding null terminator.
       const encoder = new TextEncoder();
       const data = encoder.encode(this.data);
 
       this.entriesNeeded = Math.ceil(data.length / NVS_BLOCK_SIZE);
       this.dataBuffer = new Uint8Array(
-        this.entriesNeeded * NVS_BLOCK_SIZE
+        this.entriesNeeded * NVS_BLOCK_SIZE,
       ).fill(0xff);
       this.dataBuffer.set(data);
 
@@ -129,7 +129,7 @@ export class NvsEntry implements NvsKeyValue {
   }
 
   private setPrimitiveEntry() {
-    if (typeof this.data === 'number') {
+    if (typeof this.data === "number") {
       const dataBuffer: ArrayBuffer = new ArrayBuffer(8);
       const dataBufferView: DataView = new DataView(dataBuffer, 0, 8);
       const dataBufferArray: Uint8Array = new Uint8Array(dataBuffer).fill(0xff);

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-type NvsPageState = 'ACTIVE' | 'FULL';
+type NvsPageState = "ACTIVE" | "FULL";
 
 interface NvsKeyValue {
   namespace: number;

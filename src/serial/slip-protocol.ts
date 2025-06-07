@@ -33,8 +33,8 @@ export enum SlipStreamBytes {
  * or decode.
  */
 export enum SlipStreamTransformDirection {
-  Encoding = 'encoding',
-  Decoding = 'decoding',
+  Encoding = "encoding",
+  Decoding = "decoding",
 }
 
 /**
@@ -58,7 +58,7 @@ export class SlipStreamTransformer implements Transformer {
 
   constructor(
     public direction: SlipStreamTransformDirection = SlipStreamTransformDirection.Encoding,
-    public startWithEnd: boolean = true
+    public startWithEnd: boolean = true,
   ) {}
 
   /**
@@ -68,7 +68,7 @@ export class SlipStreamTransformer implements Transformer {
    */
   transform(
     chunk: Uint8Array,
-    controller: TransformStreamDefaultController<Uint8Array>
+    controller: TransformStreamDefaultController<Uint8Array>,
   ) {
     if (this.direction === SlipStreamTransformDirection.Encoding) {
       const buffer = this.encode(chunk);
@@ -80,7 +80,7 @@ export class SlipStreamTransformer implements Transformer {
 
       controller.enqueue(new Uint8Array(buffer));
     } else {
-      const {bufferFrames, endBytes} = this.decode(chunk);
+      const { bufferFrames, endBytes } = this.decode(chunk);
       this.endBytes += endBytes;
       const minEndBytes = this.startWithEnd ? 2 : 1;
       while (this.endBytes >= minEndBytes) {
@@ -179,7 +179,7 @@ export class SlipStreamTransformer implements Transformer {
     if (buffer.length > 0) {
       bufferFrames.push([...buffer]);
     }
-    return {bufferFrames, endBytes};
+    return { bufferFrames, endBytes };
   }
 }
 
@@ -191,7 +191,7 @@ export class SlipStreamTransformer implements Transformer {
 export class SlipStreamEncoder extends TransformStream {
   constructor() {
     super(
-      new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true)
+      new SlipStreamTransformer(SlipStreamTransformDirection.Encoding, true),
     );
   }
 }
@@ -204,7 +204,7 @@ export class SlipStreamEncoder extends TransformStream {
 export class SlipStreamDecoder extends TransformStream {
   constructor() {
     super(
-      new SlipStreamTransformer(SlipStreamTransformDirection.Decoding, true)
+      new SlipStreamTransformer(SlipStreamTransformDirection.Decoding, true),
     );
   }
 }

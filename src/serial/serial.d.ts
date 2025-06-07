@@ -20,10 +20,10 @@ interface EventHandlerNonNull {
 }
 
 /** @see https://wicg.github.io/serial/#paritytype-enum */
-type ParityType = 'none' | 'even' | 'odd';
+type ParityType = "none" | "even" | "odd";
 
 /** @see https://wicg.github.io/serial/#flowcontroltype-enum */
-type FlowControlType = 'none' | 'hardware';
+type FlowControlType = "none" | "hardware";
 
 /** @see https://wicg.github.io/serial/#serialoptions-dictionary */
 interface SerialOptions {
@@ -110,24 +110,24 @@ declare class Serial extends EventTarget {
   getPorts(): Promise<SerialPort[]>;
   requestPort(options?: SerialPortRequestOptions): Promise<SerialPort>;
   addEventListener(
-    type: 'connect' | 'disconnect',
+    type: "connect" | "disconnect",
     listener: (this: this, ev: SerialConnectionEvent) => unknown,
-    useCapture?: boolean
+    useCapture?: boolean,
   ): void;
   addEventListener(
     type: string,
     listener: EventListenerOrEventListenerObject | null,
-    options?: boolean | AddEventListenerOptions
+    options?: boolean | AddEventListenerOptions,
   ): void;
   removeEventListener(
-    type: 'connect' | 'disconnect',
+    type: "connect" | "disconnect",
     callback: (this: this, ev: SerialConnectionEvent) => unknown,
-    useCapture?: boolean
+    useCapture?: boolean,
   ): void;
   removeEventListener(
     type: string,
     callback: EventListenerOrEventListenerObject | null,
-    options?: EventListenerOptions | boolean
+    options?: EventListenerOptions | boolean,
   ): void;
 }
 

@@ -18,7 +18,7 @@ import {
   ESP32Command,
   ESP32DataPacket,
   ESP32DataPacketDirection,
-} from './ESP32CommandPacket';
+} from "./ESP32CommandPacket";
 
 export class ReadRegCommand extends ESP32DataPacket {
   private readRegData = new ArrayBuffer(4);

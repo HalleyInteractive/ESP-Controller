@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-import {NvsEntry} from './nvs-entry';
-import {crc32} from '../../utils/crc32';
-import {NVSSettings} from './nvs-settings';
+import { NvsEntry } from "./nvs-entry";
+import { crc32 } from "../../utils/crc32";
+import { NVSSettings } from "./nvs-settings";
 
 enum NvsType {
   U8 = 0x01,
@@ -45,7 +45,10 @@ export class NVSPage {
   private headerVersion: Uint8Array;
   private headerCRC32: Uint8Array;
 
-  constructor(public pageNumber: number, public version: number) {
+  constructor(
+    public pageNumber: number,
+    public version: number,
+  ) {
     this.pageBuffer = new Uint8Array(NVSSettings.PAGE_SIZE).fill(0xff);
     this.pageHeader = new Uint8Array(this.pageBuffer.buffer, 0, 32);
     this.headerPageState = new Uint8Array(this.pageHeader.buffer, 0, 4);
@@ -56,7 +59,7 @@ export class NVSPage {
   }
 
   private setPageHeader() {
-    this.setPageState('ACTIVE');
+    this.setPageState("ACTIVE");
 
     this.headerPageNumber.fill(0).set([this.pageNumber]);
     this.headerVersion.set([this.version]);
@@ -67,7 +70,7 @@ export class NVSPage {
   }
 
   private getNVSEncoding(value: number | string): number {
-    if (typeof value === 'number') {
+    if (typeof value === "number") {
       const abs = Math.abs(value);
       const neg = value < 0;
       let enc = 0x00;
@@ -84,7 +87,7 @@ export class NVSPage {
         enc += 0x10;
       }
       return enc;
-    } else if (typeof value === 'string') {
+    } else if (typeof value === "string") {
       return NvsType.STR;
     } else {
       return NvsType.ANY;
@@ -101,7 +104,7 @@ export class NVSPage {
   public writeEntry(
     key: string,
     data: string | number,
-    namespaceIndex: number
+    namespaceIndex: number,
   ): NvsEntry {
     const entryKv: NvsKeyValue = {
       namespace: namespaceIndex,
@@ -129,12 +132,12 @@ export class NVSPage {
    * @param state New page state.
    */
   public setPageState(state: NvsPageState) {
-    if (state === 'FULL') {
+    if (state === "FULL") {
       this.headerPageState.set([NVSSettings.PAGE_FULL]);
-    } else if (state === 'ACTIVE') {
+    } else if (state === "ACTIVE") {
       this.headerPageState.set([NVSSettings.PAGE_ACTIVE]);
     } else {
-      throw Error('Invalid page state requested');
+      throw Error("Invalid page state requested");
     }
   }
 
