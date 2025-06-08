@@ -259,7 +259,7 @@ export class ESP32Controller extends EventTarget {
         resolve(responsePacket);
       };
 
-      this.addEventListener('command', eventListener, { signal });
+      this.addEventListener("command", eventListener, { signal });
 
       sleep(timeout).then(() => {
         if (!signal.aborted) {
