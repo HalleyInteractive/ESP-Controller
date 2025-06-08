@@ -23,7 +23,8 @@
     "test:watch": "vitest",
     "lint": "eslint 'src/**/*.ts'",
     "lint:fix": "eslint 'src/**/*.ts' --fix",
-    "build": "tsup"
+    "build": "tsup",
+    "coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -43,6 +44,7 @@
   "homepage": "https://github.com/HalleyInteractive/esp-controller#readme",
   "dependencies": {
     "@eslint/js": "^9.28.0",
+    "@vitest/coverage-v8": "^3.2.2",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.1",
     "prettier": "^3.5.3",
