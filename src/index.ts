@@ -23,6 +23,7 @@ import {
   ESP32DataPacket,
   ESP32DataPacketDirection,
 } from "./esp32/commands/ESP32CommandPacket";
+// Partition is imported by ESPImage, so we don't need to import it here.
 import { PortController } from "./serial/port-controller";
 import { sleep } from "./utils/common";
 import { ReadRegCommand } from "./esp32/commands/ReadReg";
@@ -43,37 +44,38 @@ interface CommandEventDetail {
   detail: Uint8Array | undefined;
 }
 
-export class ESP32Controller extends EventTarget {
-  private controller: PortController | undefined;
-  private port: SerialPort | undefined;
-  private synced = false;
-  private chipFamily: ChipFamily = 0;
+export function createESP32Controller() {
+  let controller: PortController | undefined;
+  let port: SerialPort | undefined;
+  let synced = false;
+  let chipFamily: ChipFamily = 0;
+  const eventTarget = new EventTarget();
 
-  async init() {
-    this.port = await navigator.serial.requestPort();
-    if (this.port) {
-      this.synced = false;
-      this.controller = new PortController(this.port);
-      await this.controller.connect();
-      this.logStreamReader();
-      this.commandStreamReader();
+  async function init() {
+    port = await navigator.serial.requestPort();
+    if (port) {
+      synced = false;
+      controller = new PortController(port);
+      await controller.connect();
+      logStreamReader();
+      commandStreamReader();
     }
   }
 
-  async logStreamReader() {
-    if (this?.controller?.connected) {
-      for await (const log of this.controller.logStream()) {
-        this.dispatchEvent(
+  async function logStreamReader() {
+    if (controller?.connected) {
+      for await (const log of controller.logStream()) {
+        eventTarget.dispatchEvent(
           new CustomEvent<LogEventDetail["detail"]>("log", { detail: log }),
         );
       }
     }
   }
 
-  async commandStreamReader() {
-    if (this?.controller?.connected) {
-      for await (const command of this.controller.commandStream()) {
-        this.dispatchEvent(
+  async function commandStreamReader() {
+    if (controller?.connected) {
+      for await (const command of controller.commandStream()) {
+        eventTarget.dispatchEvent(
           new CustomEvent<CommandEventDetail["detail"]>("command", {
             detail: command,
           }),
@@ -82,21 +84,21 @@ export class ESP32Controller extends EventTarget {
     }
   }
 
-  async stop() {
+  async function stop() {
     try {
-      await this.controller?.disconnect();
+      await controller?.disconnect();
     } catch (e) {
       console.log("Diconnect error");
       console.log(e);
     }
-    if (!this.controller?.connected) {
-      this.port = undefined;
+    if (!controller?.connected) {
+      port = undefined;
     }
-    this.synced = false;
+    synced = false;
   }
 
-  async sync() {
-    await this.reset();
+  async function sync() {
+    await reset();
     const maxAttempts = 10;
     for (let i = 0; i < maxAttempts; i++) {
       const syncCommand = new ESP32DataPacket();
@@ -108,12 +110,12 @@ export class ESP32Controller extends EventTarget {
         0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
       ]);
       syncCommand.checksum = 0;
-      await this.controller?.write(syncCommand.getPacketData());
+      await controller?.write(syncCommand.getPacketData());
 
       try {
-        const response = await this.readResponse(ESP32Command.SYNC, 100);
+        const response = await readResponse(ESP32Command.SYNC, 100);
         console.log("SYNCED", response);
-        this.synced = true;
+        synced = true;
         break;
       } catch (e) {
         console.log(`Sync attempt ${i + 1} of ${maxAttempts}: ${e}`);
@@ -123,47 +125,45 @@ export class ESP32Controller extends EventTarget {
     }
   }
 
-  async readChipFamily() {
+  async function readChipFamily() {
     const readRegCommand = new ReadRegCommand(0x60000078);
-    await this.controller?.write(readRegCommand.getPacketData());
-    const response = await this.readResponse(ESP32Command.READ_REG);
+    await controller?.write(readRegCommand.getPacketData());
+    const response = await readResponse(ESP32Command.READ_REG);
 
     if (response?.command === ESP32Command.READ_REG) {
       switch (response.value) {
         case 0x15122500:
-          this.chipFamily = ChipFamily.ESP32;
+          chipFamily = ChipFamily.ESP32;
           console.log("CHIP FAMILY: ESP32");
           break;
         case 0x500:
-          this.chipFamily = ChipFamily.ESP32S2;
+          chipFamily = ChipFamily.ESP32S2;
           console.log("CHIP FAMILY: ESP32S2");
           break;
         case 0x00062000:
-          this.chipFamily = ChipFamily.ESP8266;
+          chipFamily = ChipFamily.ESP8266;
           console.log("CHIP FAMILY: ESP8266");
           break;
         default:
-          this.chipFamily = ChipFamily.UNKNOWN;
+          chipFamily = ChipFamily.UNKNOWN;
           break;
       }
     }
 
-    const baseAddress = [0, 0x3ff00050, 0x6001a000, 0x6001a000][
-      this.chipFamily
-    ];
+    const baseAddress = [0, 0x3ff00050, 0x6001a000, 0x6001a000][chipFamily];
     for (let i = 0; i < 4; i++) {
       const readRegCommand = new ReadRegCommand(baseAddress + 4 * i);
-      await this.controller?.write(readRegCommand.getPacketData());
-      const response = await this.readResponse(ESP32Command.READ_REG);
+      await controller?.write(readRegCommand.getPacketData());
+      const response = await readResponse(ESP32Command.READ_REG);
       console.log(`eFuse ${i}`, response);
     }
   }
 
-  async flashImage(image: ESPImage) {
-    if (this.controller) {
-      if (!this.synced) {
-        await this.sync();
-        if (!this.synced) {
+  async function flashImage(image: ESPImage) {
+    if (controller) {
+      if (!synced) {
+        await sync();
+        if (!synced) {
           throw new Error(
             "ESP32 Needs to Sync before flashing a new image. Hold down the `boot` button on the ESP32 during sync attempts.",
           );
@@ -173,25 +173,25 @@ export class ESP32Controller extends EventTarget {
       await image.load();
 
       const attachCommand = new SPIAttachCommand();
-      await this.controller.write(attachCommand.getPacketData());
-      await this.readResponse(ESP32Command.SPI_ATTACH);
+      await controller.write(attachCommand.getPacketData());
+      await readResponse(ESP32Command.SPI_ATTACH);
       console.log("SPI ATTACH SENT");
 
       const apiParamCMD = new SPISetParamsCommand();
-      await this.controller.write(apiParamCMD.getPacketData());
-      await this.readResponse(ESP32Command.SPI_SET_PARAMS);
+      await controller.write(apiParamCMD.getPacketData());
+      await readResponse(ESP32Command.SPI_SET_PARAMS);
       console.log("SPI PARAMS SET");
 
       for (const partition of image.partitions) {
-        await this.flashBinary(partition);
+        await flashBinary(partition);
       }
 
       console.log("Flashing image done, resetting device...");
-      await this.reset();
+      await reset();
     }
   }
 
-  async flashBinary(partition: Partition) {
+  async function flashBinary(partition: Partition) {
     console.log(
       `Flashing partition: ${partition.filename}, offset: ${partition.offset}`,
     );
@@ -204,8 +204,8 @@ export class ESP32Controller extends EventTarget {
       packetSize,
       numPackets,
     );
-    await this.controller?.write(flashBeginCMD.getPacketData());
-    await this.readResponse(
+    await controller?.write(flashBeginCMD.getPacketData());
+    await readResponse(
       ESP32Command.FLASH_BEGIN,
       (30000 * numPackets * packetSize) / 1000000 + 500,
     );
@@ -217,18 +217,18 @@ export class ESP32Controller extends EventTarget {
         i,
         packetSize,
       );
-      await this.controller?.write(flashCommand.getPacketData());
+      await controller?.write(flashCommand.getPacketData());
       console.log(
         `[${partition.filename}] Writing block ${i + 1}/${numPackets}`,
       );
-      await this.readResponse(
+      await readResponse(
         ESP32Command.FLASH_DATA,
         (30000 * numPackets * packetSize) / 1000000 + 500,
       );
     }
   }
 
-  private readResponse(
+  function readResponse(
     cmd: ESP32Command,
     timeout: number = 2000,
   ): Promise<ESP32DataPacket | null> {
@@ -265,7 +265,7 @@ export class ESP32Controller extends EventTarget {
         resolve(responsePacket);
       };
 
-      this.addEventListener("command", eventListener, { signal });
+      eventTarget.addEventListener("command", eventListener, { signal });
 
       sleep(timeout).then(() => {
         if (!signal.aborted) {
@@ -276,16 +276,61 @@ export class ESP32Controller extends EventTarget {
     });
   }
 
-  async reset() {
-    this.synced = false;
-    this.controller?.resetPulse();
+  async function reset() {
+    synced = false;
+    controller?.resetPulse();
   }
 
-  get portConnected() {
-    return this.controller?.connected;
+  function getPortConnected() {
+    return controller?.connected;
   }
 
-  get espSynced() {
-    return this.synced;
+  function getEspSynced() {
+    return synced;
   }
+
+  // EventTarget methods
+  function addEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ) {
+    eventTarget.addEventListener(type, listener, options);
+  }
+
+  function removeEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions,
+  ) {
+    eventTarget.removeEventListener(type, listener, options);
+  }
+
+  function dispatchEvent(event: Event) {
+    return eventTarget.dispatchEvent(event);
+  }
+
+  return {
+    init,
+    logStreamReader,
+    commandStreamReader,
+    stop,
+    sync,
+    readChipFamily,
+    flashImage,
+    flashBinary,
+    reset,
+    get portConnected() {
+      return getPortConnected();
+    },
+    get espSynced() {
+      return getEspSynced();
+    },
+    addEventListener,
+    removeEventListener,
+    dispatchEvent,
+  };
 }
+
+// The ESP32Controller class has been refactored into the createESP32Controller factory function.
+// The original class definition is removed, and createESP32Controller is exported.
