@@ -34,17 +34,11 @@ enum ChipFamily {
   ESP32 = 2,
   ESP32S2 = 3,
 }
-export class ESP32Controller {
+export class ESP32Controller extends EventTarget {
   private controller: PortController | undefined;
   private port: SerialPort | undefined;
   private synced = false;
   private chipFamily: ChipFamily = 0;
-
-  serialPrintEventListeners: Set<(string: string | undefined) => void> =
-    new Set();
-  commandEventListeners: Set<
-    (command: Uint8Array<ArrayBufferLike> | undefined) => void
-  > = new Set();
 
   async init() {
     this.port = await navigator.serial.requestPort();
@@ -54,18 +48,13 @@ export class ESP32Controller {
       await this.controller.connect();
       this.logStreamReader();
       this.commandStreamReader();
-      this.serialPrintEventListeners.add((log: string | undefined) => {
-        console.log(log);
-      });
     }
   }
 
   async logStreamReader() {
     if (this?.controller?.connected) {
       for await (const log of this.controller.logStream()) {
-        for (const listener of this.serialPrintEventListeners) {
-          listener(log);
-        }
+        this.dispatchEvent(new CustomEvent('log', { detail: log }));
       }
     }
   }
@@ -73,9 +62,7 @@ export class ESP32Controller {
   async commandStreamReader() {
     if (this?.controller?.connected) {
       for await (const command of this.controller.commandStream()) {
-        for (const listener of this.commandEventListeners) {
-          listener(command);
-        }
+        this.dispatchEvent(new CustomEvent('command', { detail: command }));
       }
     }
   }
@@ -231,7 +218,17 @@ export class ESP32Controller {
     timeout: number = 2000,
   ): Promise<ESP32DataPacket | null> {
     return new Promise((resolve, reject) => {
-      const eventListener = (command: Uint8Array) => {
+      const abortController = new AbortController();
+      const signal = abortController.signal;
+
+      const eventListener = (event: Event) => {
+        const customEvent = event as CustomEvent<Uint8Array>;
+        const command = customEvent.detail;
+        if (!command) {
+          // Should not happen with the current commandStreamReader implementation
+          console.log("Received event with no command data");
+          return;
+        }
         const responsePacket = new ESP32DataPacket();
         try {
           responsePacket.parseResponse(command);
@@ -249,13 +246,17 @@ export class ESP32Controller {
           console.log("Incorrect response command");
           return;
         }
-        this.commandEventListeners.delete(eventListener);
+        abortController.abort(); // Clean up listener
         resolve(responsePacket);
       };
-      this.commandEventListeners.add(eventListener);
+
+      this.addEventListener('command', eventListener, { signal });
+
       sleep(timeout).then(() => {
-        this.commandEventListeners.delete(eventListener);
-        reject("timeout");
+        if (!signal.aborted) {
+          abortController.abort(); // Signal timeout
+          reject("timeout");
+        }
       });
     });
   }
