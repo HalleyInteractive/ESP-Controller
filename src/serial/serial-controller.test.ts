@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createLogStreamReader,
+  createSerialConnection, // 👈 Added import
   openPort,
+  requestPort, // 👈 Added import
   sendResetPulse,
   type SerialConnection,
 } from "./serial-controller"; // Adjust the import path to your file
@@ -68,6 +70,50 @@ describe("Serial Utilities", () => {
   afterEach(() => {
     // Clear all mocks after each test to ensure test isolation
     vi.clearAllMocks();
+  });
+
+  // 👇 New test suite for createSerialConnection
+  describe("createSerialConnection", () => {
+    it("should return a new serial connection object with default values", () => {
+      const newConnection = createSerialConnection();
+      expect(newConnection).toEqual({
+        port: undefined,
+        connected: false,
+        synced: false,
+        readable: null,
+        abortStreamController: undefined,
+      });
+    });
+  });
+
+  // 👇 New test suite for requestPort
+  describe("requestPort", () => {
+    const mockNewPort = createMockSerialPort();
+
+    beforeEach(() => {
+      // Mock the navigator object before each test in this suite
+      vi.stubGlobal("navigator", {
+        serial: {
+          requestPort: vi.fn().mockResolvedValue(mockNewPort),
+        },
+      });
+    });
+
+    afterEach(() => {
+      // Restore the original navigator object
+      vi.unstubAllGlobals();
+    });
+
+    it("should request a port from the navigator and update the connection state", async () => {
+      const conn = createSerialConnection();
+      conn.synced = true; // Set to true to test that it gets reset
+
+      await requestPort(conn);
+
+      expect(navigator.serial.requestPort).toHaveBeenCalledOnce();
+      expect(conn.port).toBe(mockNewPort);
+      expect(conn.synced).toBe(false);
+    });
   });
 
   describe("openPort", () => {
