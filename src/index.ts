@@ -34,6 +34,15 @@ enum ChipFamily {
   ESP32 = 2,
   ESP32S2 = 3,
 }
+
+interface LogEventDetail {
+  detail: string | undefined;
+}
+
+interface CommandEventDetail {
+  detail: Uint8Array | undefined;
+}
+
 export class ESP32Controller extends EventTarget {
   private controller: PortController | undefined;
   private port: SerialPort | undefined;
@@ -54,7 +63,7 @@ export class ESP32Controller extends EventTarget {
   async logStreamReader() {
     if (this?.controller?.connected) {
       for await (const log of this.controller.logStream()) {
-        this.dispatchEvent(new CustomEvent('log', { detail: log }));
+        this.dispatchEvent(new CustomEvent<LogEventDetail['detail']>('log', { detail: log }));
       }
     }
   }
@@ -62,7 +71,7 @@ export class ESP32Controller extends EventTarget {
   async commandStreamReader() {
     if (this?.controller?.connected) {
       for await (const command of this.controller.commandStream()) {
-        this.dispatchEvent(new CustomEvent('command', { detail: command }));
+        this.dispatchEvent(new CustomEvent<CommandEventDetail['detail']>('command', { detail: command }));
       }
     }
   }
@@ -222,7 +231,7 @@ export class ESP32Controller extends EventTarget {
       const signal = abortController.signal;
 
       const eventListener = (event: Event) => {
-        const customEvent = event as CustomEvent<Uint8Array>;
+        const customEvent = event as CustomEvent<CommandEventDetail['detail']>;
         const command = customEvent.detail;
         if (!command) {
           // Should not happen with the current commandStreamReader implementation
