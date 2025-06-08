@@ -1,18 +1,4 @@
 /**
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-/**
  * CRCTable copied from https://github.com/espressif/esp-idf/blob/master/components/nvs_flash/mock/int/crc.cpp
  * Licenced under Apache 2.0, Copyright: 2015-2016 Espressif Systems (Shanghai) PTE LTD
  * Removed L notation from all entries.
@@ -66,32 +52,24 @@ const crc32Table: number[] = [
 ];
 
 /**
- * CRC function copied and adapted from: https://github.com/SheetJS/js-crc32/blob/master/crc32.js
- * Licencsed under Apache 2.0: https://github.com/SheetJS/js-crc32/blob/master/LICENSE
- * Changes made:
- * - Typescript notation added.
- * - Referencing above CRC32 Table.
- * - Returns Uint8Array from computed value.
+ * Calculates a standard CRC32 checksum.
+ * This is a standard, byte-by-byte table-lookup implementation.
  */
 export function crc32(buf: Uint8Array, seed = 0xffffffff): Uint8Array {
-  let C = seed ^ -1;
-  const L = buf.length - 7;
-  let i = 0;
-  for (i = 0; i < L; ) {
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
+  // For a standard single-table algorithm, the initial value C should be the seed itself.
+  let C = seed;
+
+  // Process the buffer byte by byte.
+  for (let i = 0; i < buf.length; ++i) {
+    C = (C >>> 8) ^ crc32Table[(C ^ buf[i]) & 0xff];
   }
-  while (i < L + 7) C = (C >>> 8) ^ crc32Table[(C ^ buf[i++]) & 0xff];
+
+  // The final post-inversion is part of the standard algorithm.
   C = C ^ -1;
+
+  // Create and return the result buffer.
   const buffer = new ArrayBuffer(4);
-  const result = new Uint8Array(buffer).fill(0xff);
   const view = new DataView(buffer);
-  view.setUint32(0, C, true);
-  return result;
+  view.setUint32(0, C, true); // Write the final 32-bit integer in little-endian format.
+  return new Uint8Array(buffer);
 }
