@@ -54,7 +54,7 @@ export class ESP32Controller extends EventTarget {
   async logStreamReader() {
     if (this?.controller?.connected) {
       for await (const log of this.controller.logStream()) {
-        this.dispatchEvent(new CustomEvent('log', { detail: log }));
+        this.dispatchEvent(new CustomEvent("log", { detail: log }));
       }
     }
   }
@@ -62,7 +62,7 @@ export class ESP32Controller extends EventTarget {
   async commandStreamReader() {
     if (this?.controller?.connected) {
       for await (const command of this.controller.commandStream()) {
-        this.dispatchEvent(new CustomEvent('command', { detail: command }));
+        this.dispatchEvent(new CustomEvent("command", { detail: command }));
       }
     }
   }
@@ -250,7 +250,7 @@ export class ESP32Controller extends EventTarget {
         resolve(responsePacket);
       };
 
-      this.addEventListener('command', eventListener, { signal });
+      this.addEventListener("command", eventListener, { signal });
 
       sleep(timeout).then(() => {
         if (!signal.aborted) {
