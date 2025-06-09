@@ -3,6 +3,7 @@ import {
   createLogStreamReader,
   openPort,
   requestPort,
+  syncEsp,
 } from "../../src/serial/serial-controller";
 
 // --- Get references to our HTML elements ---
@@ -63,6 +64,7 @@ connectButton.addEventListener("click", init);
 (globalThis as any).SerialAPI = {
   init,
   connection,
+  syncEsp,
 };
 
 statusDiv.textContent = "Status: Ready. Click the button to connect.";

@@ -242,21 +242,27 @@ export async function writeToConnection(
 export async function syncEsp(connection: SerialConnection): Promise<boolean> {
   await sendResetPulse(connection);
   const maxAttempts = 10;
+
+  const syncCommand = new EspCommandPacket();
+  syncCommand.command = EspCommand.SYNC;
+  syncCommand.direction = EspPacketDirection.REQUEST;
+  syncCommand.data = new Uint8Array([
+    0x07, 0x07, 0x12, 0x20, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+  ]);
+  syncCommand.checksum = 0;
+
   for (let i = 0; i < maxAttempts; i++) {
-    const syncCommand = new EspCommandPacket();
-    syncCommand.command = EspCommand.SYNC;
-    syncCommand.direction = EspPacketDirection.REQUEST;
-    syncCommand.data = new Uint8Array([
-      0x07, 0x07, 0x12, 0x20, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-      0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-      0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-    ]);
-    syncCommand.checksum = 0;
     await writeToConnection(connection, syncCommand.getPacketData());
 
     const responseReader = createCommandStreamReader(connection)();
+    let response;
+    for (let x = 0; x < 10; x++) {
+      response = await Promise.race([responseReader.next(), sleep(100)]);
+      console.log("RESPONSE", response);
+    }
 
-    const response = await Promise.race([responseReader.next(), sleep(100)]);
     const responsePacket = new EspCommandPacket();
     if (response?.value) {
       responsePacket.parseResponse(response.value);
