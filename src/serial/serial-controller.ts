@@ -20,7 +20,7 @@ const DEFAULT_ESP32_SERIAL_OPTIONS: SerialOptions = {
 /**
  * Interface defining the properties of a serial connection.
  */
-export interface SerialConnection {
+export interface ESPDeviceConnection {
   /** The underlying SerialPort object. Undefined if no port is selected. */
   port: SerialPort | undefined;
   /** Indicates if the serial port is currently open and connected. */
@@ -36,10 +36,10 @@ export interface SerialConnection {
 }
 
 /**
- * Creates an empty SerialConnection object with default initial values.
- * @returns A new SerialConnection object with its properties initialized.
+ * Creates an empty ESPDeviceConnection object with default initial values.
+ * @returns A new ESPDeviceConnection object with its properties initialized.
  */
-export function createSerialConnection() {
+export function createESPDeviceConnection() {
   return {
     port: undefined,
     connected: false,
@@ -51,68 +51,68 @@ export function createSerialConnection() {
 }
 
 /**
- * Prompts the user to select a serial port and assigns it to the provided connection object.
- * This function modifies the `connection.port` property and sets `connection.synced` to `false`.
- * @param connection The SerialConnection object to which the requested port will be assigned.
- * @returns A Promise that resolves with the modified SerialConnection object.
+ * Prompts the user to select a serial port and assigns it to the provided deviceConnection object.
+ * This function modifies the `deviceConnection.port` property and sets `deviceConnection.synced` to `false`.
+ * @param deviceConnection The ESPDeviceConnection object to which the requested port will be assigned.
+ * @returns A Promise that resolves with the modified ESPDeviceConnection object.
  */
-export async function requestPort(
-  connection: SerialConnection,
-): Promise<SerialConnection> {
-  connection.port = await navigator.serial.requestPort();
-  connection.synced = false;
-  return connection;
+export async function requestESPDevicePort(
+  deviceConnection: ESPDeviceConnection,
+): Promise<ESPDeviceConnection> {
+  deviceConnection.port = await navigator.serial.requestPort();
+  deviceConnection.synced = false;
+  return deviceConnection;
 }
 
 /**
- * Attaches a SLIP (Serial Line Internet Protocol) encoder to the `connection.writable` stream.
- * This function modifies the `connection.writable` property to use the SLIP encoder,
+ * Attaches a SLIP (Serial Line Internet Protocol) encoder to the `deviceConnection.writable` stream.
+ * This function modifies the `deviceConnection.writable` property to use the SLIP encoder,
  * allowing outgoing data to be automatically encoded in the SLIP format.
- * @param connection The SerialConnection object whose writable stream will be wrapped with a SLIP encoder.
+ * @param deviceConnection The ESPDeviceConnection object whose writable stream will be wrapped with a SLIP encoder.
  */
-export function attachSlipstreamEncoder(connection: SerialConnection): void {
-  if (!connection.writable || !connection.abortStreamController) {
+export function attachSLIPEncoder(deviceConnection: ESPDeviceConnection): void {
+  if (!deviceConnection.writable || !deviceConnection.abortStreamController) {
     return;
   }
   const streamPipeOptions = {
-    signal: connection.abortStreamController.signal,
+    signal: deviceConnection.abortStreamController.signal,
     preventCancel: false,
     preventClose: false,
     preventAbort: false,
   };
   const encoder = new SlipStreamEncoder();
-  encoder.readable.pipeTo(connection.port.writable, streamPipeOptions);
+  encoder.readable.pipeTo(deviceConnection.port.writable, streamPipeOptions);
 
-  connection.writable = encoder.writable;
+  deviceConnection.writable = encoder.writable;
 }
 
 /**
- * Creates a log stream reader by teeing the `connection.readable` stream.
- * The original `connection.readable` is replaced with one of the new streams.
+ * Creates a log stream reader by teeing the `deviceConnection.readable` stream.
+ * The original `deviceConnection.readable` is replaced with one of the new streams.
  * The returned async generator yields strings, where each string is a line of text
  * received from the serial port, decoded as UTF-8, and split by line breaks.
- * @param connection The SerialConnection object.
- * @returns An async generator function that yields log strings from the connection.
+ * @param deviceConnection The ESPDeviceConnection object.
+ * @returns An async generator function that yields log strings from the deviceConnection.
  */
-export function createLogStreamReader(
-  connection: SerialConnection,
+export function createDeviceLogStreamReader(
+  deviceConnection: ESPDeviceConnection,
 ): () => AsyncGenerator<string | undefined, void, unknown> {
   if (
-    !connection.connected ||
-    !connection.readable ||
-    !connection.abortStreamController
+    !deviceConnection.connected ||
+    !deviceConnection.readable ||
+    !deviceConnection.abortStreamController
   )
     return async function* logStream() {};
 
   const streamPipeOptions = {
-    signal: connection.abortStreamController.signal,
+    signal: deviceConnection.abortStreamController.signal,
     preventCancel: false,
     preventClose: false,
     preventAbort: false,
   };
 
-  const [newReadable, logReadable] = connection.readable.tee();
-  connection.readable = newReadable;
+  const [newReadable, logReadable] = deviceConnection.readable.tee();
+  deviceConnection.readable = newReadable;
 
   const reader = logReadable
     .pipeThrough(new TextDecoderStream(), streamPipeOptions)
@@ -121,7 +121,7 @@ export function createLogStreamReader(
 
   return async function* logStream() {
     try {
-      while (connection.connected) {
+      while (deviceConnection.connected) {
         const result = await reader?.read();
         if (result?.done) return;
         yield result?.value;
@@ -133,32 +133,32 @@ export function createLogStreamReader(
 }
 
 /**
- * Creates a command stream reader by teeing the `connection.readable` stream.
- * The original `connection.readable` is replaced with one of the new streams.
+ * Creates a command stream reader by teeing the `deviceConnection.readable` stream.
+ * The original `deviceConnection.readable` is replaced with one of the new streams.
  * The returned async generator yields `Uint8Array`s, where each array represents
  * a decoded SLIP (Serial Line Internet Protocol) packet received from the serial port.
- * @param connection The SerialConnection object.
+ * @param deviceConnection The ESPDeviceConnection object.
  * @returns An async generator function that yields Uint8Array objects representing decoded SLIP packets.
  */
-export function createCommandStreamReader(
-  connection: SerialConnection,
+export function createDeviceCommandStreamReader(
+  deviceConnection: ESPDeviceConnection,
 ): () => AsyncGenerator<Uint8Array<ArrayBufferLike>, void, unknown> {
   if (
-    !connection.connected ||
-    !connection.readable ||
-    !connection.abortStreamController
+    !deviceConnection.connected ||
+    !deviceConnection.readable ||
+    !deviceConnection.abortStreamController
   )
     return async function* logStream() {};
 
   const streamPipeOptions = {
-    signal: connection.abortStreamController.signal,
+    signal: deviceConnection.abortStreamController.signal,
     preventCancel: false,
     preventClose: false,
     preventAbort: false,
   };
 
-  const [newReadable, commandReadable] = connection.readable.tee();
-  connection.readable = newReadable;
+  const [newReadable, commandReadable] = deviceConnection.readable.tee();
+  deviceConnection.readable = newReadable;
 
   const reader = commandReadable
     .pipeThrough(new SlipStreamDecoder(), streamPipeOptions)
@@ -166,7 +166,7 @@ export function createCommandStreamReader(
 
   return async function* commandStream() {
     try {
-      while (connection.connected) {
+      while (deviceConnection.connected) {
         const result = await reader?.read();
         if (result?.done) return;
         yield result?.value;
@@ -178,58 +178,58 @@ export function createCommandStreamReader(
 }
 
 /**
- * Opens the serial port associated with the given SerialConnection object.
- * This function modifies the passed-in connection object by setting `connected` to true,
+ * Opens the serial port associated with the given ESPDeviceConnection object.
+ * This function modifies the passed-in deviceConnection object by setting `connected` to true,
  * and initializing `readable`, `writable`, and `abortStreamController` properties
- * upon successful opening of the port. It also returns the modified connection object.
- * @param connection The SerialConnection object for which the port is to be opened.
+ * upon successful opening of the port. It also returns the modified deviceConnection object.
+ * @param deviceConnection The ESPDeviceConnection object for which the port is to be opened.
  * @param options Optional SerialOptions to configure the port. Defaults to `DEFAULT_ESP32_SERIAL_OPTIONS`.
- * @returns A Promise that resolves with the modified SerialConnection object.
+ * @returns A Promise that resolves with the modified ESPDeviceConnection object.
  */
-export async function openPort(
-  connection: SerialConnection,
+export async function openESPDevicePort(
+  deviceConnection: ESPDeviceConnection,
   options: SerialOptions = DEFAULT_ESP32_SERIAL_OPTIONS,
-): Promise<SerialConnection> {
-  if (!connection.port) return connection;
-  await connection.port.open(options);
-  connection.connected = true;
-  connection.readable = connection.port.readable;
-  connection.writable = connection.port.writable;
-  connection.abortStreamController = new AbortController();
-  return connection;
+): Promise<ESPDeviceConnection> {
+  if (!deviceConnection.port) return deviceConnection;
+  await deviceConnection.port.open(options);
+  deviceConnection.connected = true;
+  deviceConnection.readable = deviceConnection.port.readable;
+  deviceConnection.writable = deviceConnection.port.writable;
+  deviceConnection.abortStreamController = new AbortController();
+  return deviceConnection;
 }
 
 /**
  * Sends a reset pulse to the connected device by toggling the DTR (Data Terminal Ready)
  * and RTS (Request To Send) signals. This sequence is often used to put microcontrollers
  * like ESP32 into bootloader mode, allowing for firmware updates or other programming operations.
- * @param connection A SerialConnection object with an active and connected port.
+ * @param deviceConnection A ESPDeviceConnection object with an active and connected port.
  */
-export async function sendResetPulse(
-  connection: SerialConnection,
+export async function sendESPDeviceResetPulse(
+  deviceConnection: ESPDeviceConnection,
 ): Promise<void> {
-  if (!connection.port) return;
-  connection.port.setSignals({ dataTerminalReady: false, requestToSend: true });
+  if (!deviceConnection.port) return;
+  deviceConnection.port.setSignals({ dataTerminalReady: false, requestToSend: true });
   await sleep(100);
-  connection.port.setSignals({ dataTerminalReady: true, requestToSend: false });
+  deviceConnection.port.setSignals({ dataTerminalReady: true, requestToSend: false });
   await sleep(50);
 }
 
 /**
- * Asynchronously writes a Uint8Array to the serial connection's writable stream.
+ * Asynchronously writes a Uint8Array to the serial deviceConnection's writable stream.
  * Attaches a SLIP encoder if one is not already present and the port is available.
  */
-export async function writeToConnection(
-  connection: SerialConnection,
+export async function writeToESPDevice(
+  deviceConnection: ESPDeviceConnection,
   data: Uint8Array,
 ) {
-  if (!connection.writable && connection.port) {
-    attachSlipstreamEncoder(connection);
+  if (!deviceConnection.writable && deviceConnection.port) {
+    attachSLIPEncoder(deviceConnection);
   }
-  if (!connection.writable) {
+  if (!deviceConnection.writable) {
     return;
   }
-  const writer = connection.writable.getWriter();
+  const writer = deviceConnection.writable.getWriter();
   await writer.write(data);
   writer.releaseLock();
 }

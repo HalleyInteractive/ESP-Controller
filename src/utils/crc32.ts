@@ -3,7 +3,7 @@
  * Licenced under Apache 2.0, Copyright: 2015-2016 Espressif Systems (Shanghai) PTE LTD
  * Removed L notation from all entries.
  */
-const crc32Table: number[] = [
+const CRC32_LOOKUP_TABLE: number[] = [
   0x00000000, 0x77073096, 0xee0e612c, 0x990951ba, 0x076dc419, 0x706af48f,
   0xe963a535, 0x9e6495a3, 0x0edb8832, 0x79dcb8a4, 0xe0d5e91e, 0x97d2d988,
   0x09b64c2b, 0x7eb17cbd, 0xe7b82d07, 0x90bf1d91, 0x1db71064, 0x6ab020f2,
@@ -58,12 +58,12 @@ const crc32Table: number[] = [
  * @param seed The initial CRC value. Defaults to 0xFFFFFFFF.
  * @returns A 4-byte Uint8Array representing the CRC32 checksum in little-endian order.
  */
-export function crc32(buf: Uint8Array, seed = 0xffffffff): Uint8Array {
+export function calculateCRC32(buf: Uint8Array, seed = 0xffffffff): Uint8Array {
   // For a standard single-table algorithm, the initial value C should be the seed itself.
   let C = seed;
 
   for (let i = 0; i < buf.length; ++i) {
-    C = (C >>> 8) ^ crc32Table[(C ^ buf[i]) & 0xff];
+    C = (C >>> 8) ^ CRC32_LOOKUP_TABLE[(C ^ buf[i]) & 0xff];
   }
 
   // The final post-inversion is part of the standard algorithm.

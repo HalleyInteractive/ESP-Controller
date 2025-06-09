@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from "vitest";
 import {
-  createLoggingTransformer,
-  createUint8LoggingTransformer,
-  createLineBreakTransformer,
-  SlipStreamEncoder,
-  SlipStreamDecoder,
+  createDeviceLogTransformer,
+  createDeviceDataTransformer,
+  createDeviceLogLineBreakTransformer,
+  SLIPDataEncoder,
+  SLIPDataDecoder,
 } from "./stream-transformers";
 
 // Helper function to read everything from a stream until it's closed
@@ -22,10 +22,10 @@ async function readAllChunks(reader: ReadableStreamDefaultReader<Uint8Array>) {
   return chunks;
 }
 
-describe("LoggingTransformer", () => {
+describe("DeviceLogTransformer", () => {
   it("should log and pass through string chunks", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const transformer = createLoggingTransformer();
+    const transformer = createDeviceLogTransformer();
     const reader = transformer.readable.getReader();
     const writer = transformer.writable.getWriter();
     const testChunk = "hello world";
@@ -38,17 +38,17 @@ describe("LoggingTransformer", () => {
 
     const { value } = await readPromise;
 
-    expect(consoleSpy).toHaveBeenCalledWith("STREAM LOG: ", testChunk);
+    expect(consoleSpy).toHaveBeenCalledWith("DEVICE LOG: ", testChunk);
     expect(value).toEqual(testChunk);
 
     consoleSpy.mockRestore();
   });
 });
 
-describe("Uint8LoggingTransformer", () => {
+describe("DeviceDataTransformer", () => {
   it("should log and pass through Uint8Array chunks", async () => {
     const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    const transformer = createUint8LoggingTransformer();
+    const transformer = createDeviceDataTransformer();
     const reader = transformer.readable.getReader();
     const writer = transformer.writable.getWriter();
     const testChunk = new Uint8Array([1, 2, 3]);
@@ -61,16 +61,16 @@ describe("Uint8LoggingTransformer", () => {
 
     const { value } = await readPromise;
 
-    expect(consoleSpy).toHaveBeenCalledWith("UINT8 STREAM LOG: ", testChunk);
+    expect(consoleSpy).toHaveBeenCalledWith("DEVICE DATA: ", testChunk);
     expect(value).toEqual(testChunk);
 
     consoleSpy.mockRestore();
   });
 });
 
-describe("LineBreakTransformer", () => {
+describe("DeviceLogLineBreakTransformer", () => {
   it("should buffer and transform chunks into lines", async () => {
-    const transformer = createLineBreakTransformer();
+    const transformer = createDeviceLogLineBreakTransformer();
     const reader = transformer.readable.getReader();
     const writer = transformer.writable.getWriter();
 
@@ -89,7 +89,7 @@ describe("LineBreakTransformer", () => {
   });
 
   it("should handle multiple lines in a single chunk", async () => {
-    const transformer = createLineBreakTransformer();
+    const transformer = createDeviceLogLineBreakTransformer();
     const reader = transformer.readable.getReader();
     const writer = transformer.writable.getWriter();
 
@@ -103,7 +103,7 @@ describe("LineBreakTransformer", () => {
   });
 
   it("should handle an empty stream", async () => {
-    const transformer = createLineBreakTransformer();
+    const transformer = createDeviceLogLineBreakTransformer();
     const reader = transformer.readable.getReader();
     const writer = transformer.writable.getWriter();
 
@@ -115,9 +115,9 @@ describe("LineBreakTransformer", () => {
   });
 });
 
-describe("SlipStreamEncoder", () => {
+describe("SLIPDataEncoder", () => {
   it("should encode a simple chunk with start and end markers", async () => {
-    const encoder = new SlipStreamEncoder();
+    const encoder = new SLIPDataEncoder();
     const writer = encoder.writable.getWriter();
     const reader = encoder.readable.getReader();
 
@@ -134,7 +134,7 @@ describe("SlipStreamEncoder", () => {
   });
 
   it("should escape END bytes within the chunk", async () => {
-    const encoder = new SlipStreamEncoder();
+    const encoder = new SLIPDataEncoder();
     const writer = encoder.writable.getWriter();
     const reader = encoder.readable.getReader();
 
@@ -151,7 +151,7 @@ describe("SlipStreamEncoder", () => {
   });
 
   it("should escape ESC bytes within the chunk", async () => {
-    const encoder = new SlipStreamEncoder();
+    const encoder = new SLIPDataEncoder();
     const writer = encoder.writable.getWriter();
     const reader = encoder.readable.getReader();
 
@@ -168,9 +168,9 @@ describe("SlipStreamEncoder", () => {
   });
 });
 
-describe("SlipStreamDecoder", () => {
+describe("SLIPDataDecoder", () => {
   it("should decode a simple frame", async () => {
-    const decoder = new SlipStreamDecoder();
+    const decoder = new SLIPDataDecoder();
     const writer = decoder.writable.getWriter();
     const reader = decoder.readable.getReader();
 
@@ -185,7 +185,7 @@ describe("SlipStreamDecoder", () => {
   });
 
   it("should decode a frame with escaped END and ESC bytes", async () => {
-    const decoder = new SlipStreamDecoder();
+    const decoder = new SLIPDataDecoder();
     const writer = decoder.writable.getWriter();
     const reader = decoder.readable.getReader();
     // 1, END, 2, ESC, 3
@@ -203,7 +203,7 @@ describe("SlipStreamDecoder", () => {
   });
 
   it("should decode multiple frames from a single chunk", async () => {
-    const decoder = new SlipStreamDecoder();
+    const decoder = new SLIPDataDecoder();
     const writer = decoder.writable.getWriter();
     const reader = decoder.readable.getReader();
 
@@ -222,7 +222,7 @@ describe("SlipStreamDecoder", () => {
   });
 
   it("should handle a frame split across multiple chunks", async () => {
-    const decoder = new SlipStreamDecoder();
+    const decoder = new SLIPDataDecoder();
     const writer = decoder.writable.getWriter();
     const reader = decoder.readable.getReader();
 
@@ -239,7 +239,7 @@ describe("SlipStreamDecoder", () => {
   });
 
   it("should ignore data before the first END byte", async () => {
-    const decoder = new SlipStreamDecoder();
+    const decoder = new SLIPDataDecoder();
     const writer = decoder.writable.getWriter();
     const reader = decoder.readable.getReader();
 

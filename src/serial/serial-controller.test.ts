@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
-  createLogStreamReader,
-  createSerialConnection,
-  openPort,
-  requestPort,
-  sendResetPulse,
-  type SerialConnection,
+  createDeviceLogStreamReader,
+  createESPDeviceConnection,
+  openESPDevicePort,
+  requestESPDevicePort,
+  sendESPDeviceResetPulse,
+  type ESPDeviceConnection,
 } from "./serial-controller";
 import { sleep } from "../utils/common";
 
@@ -53,11 +53,11 @@ type MockSerialPort = ReturnType<typeof createMockSerialPort>;
 
 describe("Serial Utilities", () => {
   let mockPort: MockSerialPort;
-  let connection: SerialConnection;
+  let deviceConnection: ESPDeviceConnection;
 
   beforeEach(() => {
     mockPort = createMockSerialPort();
-    connection = {
+    deviceConnection = {
       // Cast the mock to the actual SerialPort type for type safety in the functions being tested
       port: mockPort as unknown as SerialPort,
       connected: false,
@@ -73,9 +73,9 @@ describe("Serial Utilities", () => {
     vi.clearAllMocks();
   });
 
-  describe("createSerialConnection", () => {
+  describe("createESPDeviceConnection", () => {
     it("should return a new serial connection object with default values", () => {
-      const newConnection = createSerialConnection();
+      const newConnection = createESPDeviceConnection();
       expect(newConnection).toEqual({
         port: undefined,
         connected: false,
@@ -87,7 +87,7 @@ describe("Serial Utilities", () => {
     });
   });
 
-  describe("requestPort", () => {
+  describe("requestESPDevicePort", () => {
     const mockNewPort = createMockSerialPort();
 
     beforeEach(() => {
@@ -105,10 +105,10 @@ describe("Serial Utilities", () => {
     });
 
     it("should request a port from the navigator and update the connection state", async () => {
-      const conn = createSerialConnection();
-      conn.synced = true; // Set to true to test that it gets reset by requestPort
+      const conn = createESPDeviceConnection();
+      conn.synced = true; // Set to true to test that it gets reset by requestESPDevicePort
 
-      await requestPort(conn);
+      await requestESPDevicePort(conn);
 
       expect(navigator.serial.requestPort).toHaveBeenCalledOnce();
       expect(conn.port).toBe(mockNewPort);
@@ -116,9 +116,9 @@ describe("Serial Utilities", () => {
     });
   });
 
-  describe("openPort", () => {
+  describe("openESPDevicePort", () => {
     it("should open the port with default options and update connection state", async () => {
-      await openPort(connection);
+      await openESPDevicePort(deviceConnection);
 
       expect(mockPort.open).toHaveBeenCalledTimes(1);
       // Check that the default options were used when none are provided
@@ -128,19 +128,19 @@ describe("Serial Utilities", () => {
           parity: "none",
         }),
       );
-      expect(connection.connected).toBe(true);
-      expect(connection.readable).toBe(mockPort.readable);
+      expect(deviceConnection.connected).toBe(true);
+      expect(deviceConnection.readable).toBe(mockPort.readable);
     });
 
     it("should open the port with custom options", async () => {
       const customOptions: SerialOptions = { baudRate: 9600, dataBits: 7 };
-      await openPort(connection, customOptions);
+      await openESPDevicePort(deviceConnection, customOptions);
 
       expect(mockPort.open).toHaveBeenCalledWith(customOptions);
     });
   });
 
-  describe("sendResetPulse", () => {
+  describe("sendESPDeviceResetPulse", () => {
     beforeEach(() => {
       // Use fake timers to control sleep/setTimeout calls
       vi.useFakeTimers();
@@ -152,7 +152,7 @@ describe("Serial Utilities", () => {
 
     it("should send the correct sequence of signals with delays", async () => {
       const setSignalsSpy = vi.spyOn(mockPort, "setSignals");
-      const resetPromise = sendResetPulse(connection);
+      const resetPromise = sendESPDeviceResetPulse(deviceConnection);
 
       // Check initial signal state for reset
       expect(setSignalsSpy).toHaveBeenCalledWith({
@@ -174,25 +174,25 @@ describe("Serial Utilities", () => {
       // Advance time past the second sleep interval
       await vi.advanceTimersByTimeAsync(50);
 
-      // Ensure the sendResetPulse promise completes
+      // Ensure the sendESPDeviceResetPulse promise completes
       await resetPromise;
 
       expect(setSignalsSpy).toHaveBeenCalledTimes(2);
     });
 
     it("should do nothing if the port is not defined", async () => {
-      connection.port = undefined;
-      await sendResetPulse(connection);
+      deviceConnection.port = undefined;
+      await sendESPDeviceResetPulse(deviceConnection);
       expect(mockPort.setSignals).not.toHaveBeenCalled();
     });
   });
 
-  describe("createLogStreamReader", () => {
+  describe("createDeviceLogStreamReader", () => {
     const textEncoder = new TextEncoder();
 
     it("should return an empty async generator if not connected", async () => {
-      connection.connected = false;
-      const logStreamReader = createLogStreamReader(connection);
+      deviceConnection.connected = false;
+      const logStreamReader = createDeviceLogStreamReader(deviceConnection);
       const generator = logStreamReader();
       const result = await generator.next();
 
@@ -200,9 +200,9 @@ describe("Serial Utilities", () => {
     });
 
     it("should return an empty async generator if readable is null", async () => {
-      connection.connected = true;
-      connection.readable = null;
-      const logStreamReader = createLogStreamReader(connection);
+      deviceConnection.connected = true;
+      deviceConnection.readable = null;
+      const logStreamReader = createDeviceLogStreamReader(deviceConnection);
       const generator = logStreamReader();
       const result = await generator.next();
 
@@ -210,15 +210,15 @@ describe("Serial Utilities", () => {
     });
 
     it("should tee the readable stream and yield decoded lines", async () => {
-      connection.connected = true;
-      connection.readable = mockPort.readable;
-      connection.abortStreamController = new AbortController();
-      const originalReadable = connection.readable;
+      deviceConnection.connected = true;
+      deviceConnection.readable = mockPort.readable;
+      deviceConnection.abortStreamController = new AbortController();
+      const originalReadable = deviceConnection.readable;
 
-      const logStream = createLogStreamReader(connection)();
+      const logStream = createDeviceLogStreamReader(deviceConnection)();
 
-      // Verify the stream was teed and the connection's readable was updated
-      expect(connection.readable).not.toBe(originalReadable);
+      // Verify the stream was teed and the deviceConnection's readable was updated
+      expect(deviceConnection.readable).not.toBe(originalReadable);
 
       const receivedLines: (string | undefined)[] = [];
 
@@ -245,11 +245,11 @@ describe("Serial Utilities", () => {
       expect(receivedLines).toEqual(["first line", "second line"]);
     });
 
-    it("should stop yielding when connection.connected becomes false", async () => {
-      connection.connected = true;
-      connection.readable = mockPort.readable;
-      connection.abortStreamController = new AbortController();
-      const logStream = createLogStreamReader(connection)();
+    it("should stop yielding when deviceConnection.connected becomes false", async () => {
+      deviceConnection.connected = true;
+      deviceConnection.readable = mockPort.readable;
+      deviceConnection.abortStreamController = new AbortController();
+      const logStream = createDeviceLogStreamReader(deviceConnection)();
 
       const receivedLines: (string | undefined)[] = [];
 
@@ -258,7 +258,7 @@ describe("Serial Utilities", () => {
           receivedLines.push(line);
           // Simulate a disconnect after receiving the first line
           if (receivedLines.length === 1) {
-            connection.connected = false;
+            deviceConnection.connected = false;
           }
         }
       })();
@@ -279,9 +279,9 @@ describe("Serial Utilities", () => {
     });
 
     it("should release the reader lock when the stream is fully consumed", async () => {
-      connection.connected = true;
-      connection.readable = mockPort.readable;
-      const logStream = createLogStreamReader(connection)();
+      deviceConnection.connected = true;
+      deviceConnection.readable = mockPort.readable;
+      const logStream = createDeviceLogStreamReader(deviceConnection)();
 
       const consumer = async () => {
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -298,8 +298,8 @@ describe("Serial Utilities", () => {
       await Promise.all([consumer(), producer()]);
 
       // To verify the lock is released, we check if we can get a new reader
-      // from the other teed stream, which is now connection.readable.
-      const reader2 = connection.readable?.getReader();
+      // from the other teed stream, which is now deviceConnection.readable.
+      const reader2 = deviceConnection.readable?.getReader();
       expect(reader2).toBeDefined();
 
       // Since the original stream is closed, this should read as done.

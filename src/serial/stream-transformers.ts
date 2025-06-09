@@ -1,5 +1,5 @@
 /* SLIP special character codes */
-enum SlipStreamBytes {
+enum SLIPProtocolBytes {
   END = 0xc0, // Indicates end of packet
   ESC = 0xdb, // Indicates byte stuffing
   ESC_END = 0xdc, // ESC ESC_END means END data byte
@@ -10,12 +10,12 @@ enum SlipStreamBytes {
  * A generic string logging transformer.
  * It logs each chunk to the console and passes it through unmodified.
  */
-class LoggingTransformer implements Transformer<string, string> {
+class DeviceLogTransformer implements Transformer<string, string> {
   /**
-   * Constructs a new LoggingTransformer.
+   * Constructs a new DeviceLogTransformer.
    * @param logPrefix A prefix string to prepend to each log message.
    */
-  constructor(public logPrefix: string = "STREAM LOG: ") {}
+  constructor(public logPrefix: string = "DEVICE LOG: ") {}
   /**
    * Logs the incoming chunk to the console with the configured prefix
    * and then enqueues it to be passed to the next stage in the stream.
@@ -35,12 +35,12 @@ class LoggingTransformer implements Transformer<string, string> {
  * A generic Uint8Array logging transformer.
  * It logs each chunk to the console and passes it through unmodified.
  */
-class Uint8LoggingTransformer implements Transformer<Uint8Array, Uint8Array> {
+class DeviceDataTransformer implements Transformer<Uint8Array, Uint8Array> {
   /**
-   * Constructs a new Uint8LoggingTransformer.
+   * Constructs a new DeviceDataTransformer.
    * @param logPrefix A prefix string to prepend to each log message.
    */
-  constructor(public logPrefix: string = "UINT8 STREAM LOG: ") {}
+  constructor(public logPrefix: string = "DEVICE DATA: ") {}
   /**
    * Logs the incoming chunk to the console with the configured prefix
    * and then enqueues it to be passed to the next stage in the stream.
@@ -61,7 +61,7 @@ class Uint8LoggingTransformer implements Transformer<Uint8Array, Uint8Array> {
  * It ensures that only complete lines are enqueued. Any partial line at the end of a chunk is buffered
  * and prepended to the next chunk.
  */
-class LineBreakTransformer implements Transformer<string, string> {
+class DeviceLogLineBreakTransformer implements Transformer<string, string> {
   buffer: string | undefined = "";
   transform(
     chunk: string,
@@ -78,7 +78,7 @@ class LineBreakTransformer implements Transformer<string, string> {
  * Implements the SLIP (Serial Line Internet Protocol) encoding and decoding logic.
  * This transformer can be configured to operate in either encoding or decoding mode.
  */
-export class SlipStreamTransformer
+export class SLIPDataTransformer
   implements Transformer<Uint8Array, Uint8Array>
 {
   private decoding = false; // Flag to indicate if the initial END byte for a packet has been received in decoding mode.
@@ -86,7 +86,7 @@ export class SlipStreamTransformer
   private frame: number[] = []; // Buffer to accumulate bytes for the current frame.
 
   /**
-   * Constructs a new SlipStreamTransformer.
+   * Constructs a new SLIPDataTransformer.
    * @param mode Specifies whether the transformer should operate in "encoding" or "decoding" mode.
    */
   constructor(private mode: "encoding" | "decoding") {
@@ -106,20 +106,20 @@ export class SlipStreamTransformer
           // Currently inside a frame
           if (this.escape) {
             // Previous byte was ESC
-            if (byte === SlipStreamBytes.ESC_END) {
-              this.frame.push(SlipStreamBytes.END);
-            } else if (byte === SlipStreamBytes.ESC_ESC) {
-              this.frame.push(SlipStreamBytes.ESC);
+            if (byte === SLIPProtocolBytes.ESC_END) {
+              this.frame.push(SLIPProtocolBytes.END);
+            } else if (byte === SLIPProtocolBytes.ESC_ESC) {
+              this.frame.push(SLIPProtocolBytes.ESC);
             } else {
               // This case should ideally not happen in a valid SLIP stream,
               // but we'll add the byte as is to be robust.
               this.frame.push(byte);
             }
             this.escape = false;
-          } else if (byte === SlipStreamBytes.ESC) {
+          } else if (byte === SLIPProtocolBytes.ESC) {
             // Start of an escape sequence
             this.escape = true;
-          } else if (byte === SlipStreamBytes.END) {
+          } else if (byte === SLIPProtocolBytes.END) {
             // End of the current frame
             if (this.frame.length > 0) {
               controller.enqueue(new Uint8Array(this.frame));
@@ -130,7 +130,7 @@ export class SlipStreamTransformer
             // Regular data byte
             this.frame.push(byte);
           }
-        } else if (byte === SlipStreamBytes.END) {
+        } else if (byte === SLIPProtocolBytes.END) {
           // Start of a new frame (or end of a previous one, signaling start of a new one)
           this.decoding = true;
           this.frame = []; // Clear any previous partial frame data
@@ -143,10 +143,10 @@ export class SlipStreamTransformer
       // and accumulates them in an internal buffer. The actual packet framing
       // with END bytes is handled in the flush method.
       for (const byte of chunk) {
-        if (byte === SlipStreamBytes.END) {
-          this.frame.push(SlipStreamBytes.ESC, SlipStreamBytes.ESC_END);
-        } else if (byte === SlipStreamBytes.ESC) {
-          this.frame.push(SlipStreamBytes.ESC, SlipStreamBytes.ESC_ESC);
+        if (byte === SLIPProtocolBytes.END) {
+          this.frame.push(SLIPProtocolBytes.ESC, SLIPProtocolBytes.ESC_END);
+        } else if (byte === SLIPProtocolBytes.ESC) {
+          this.frame.push(SLIPProtocolBytes.ESC, SLIPProtocolBytes.ESC_ESC);
         } else {
           this.frame.push(byte);
         }
@@ -161,9 +161,9 @@ export class SlipStreamTransformer
       // Only enqueue if there's data to send to avoid empty packets.
       if (this.frame.length > 0) {
         const finalPacket = new Uint8Array([
-          SlipStreamBytes.END,
+          SLIPProtocolBytes.END,
           ...this.frame,
-          SlipStreamBytes.END,
+          SLIPProtocolBytes.END,
         ]);
         controller.enqueue(finalPacket);
         this.frame = []; // Clear the frame buffer after flushing
@@ -177,19 +177,19 @@ export class SlipStreamTransformer
 
 /**
  * Creates a TransformStream that logs string chunks to the console.
- * @returns A new TransformStream instance with a LoggingTransformer.
+ * @returns A new TransformStream instance with a DeviceLogTransformer.
  */
-export function createLoggingTransformer() {
-  return new TransformStream<string, string>(new LoggingTransformer());
+export function createDeviceLogTransformer() {
+  return new TransformStream<string, string>(new DeviceLogTransformer());
 }
 
 /**
  * Creates a TransformStream that logs Uint8Array chunks to the console.
- * @returns A new TransformStream instance with a Uint8LoggingTransformer.
+ * @returns A new TransformStream instance with a DeviceDataTransformer.
  */
-export function createUint8LoggingTransformer() {
+export function createDeviceDataTransformer() {
   return new TransformStream<Uint8Array, Uint8Array>(
-    new Uint8LoggingTransformer(),
+    new DeviceDataTransformer(),
   );
 }
 
@@ -198,8 +198,8 @@ export function createUint8LoggingTransformer() {
  * Chunks are saved to buffer until `\r\n` is send.
  * @returns TransformStream
  */
-export function createLineBreakTransformer() {
-  return new TransformStream<string, string>(new LineBreakTransformer());
+export function createDeviceLogLineBreakTransformer() {
+  return new TransformStream<string, string>(new DeviceLogLineBreakTransformer());
 }
 
 /**
@@ -208,15 +208,15 @@ export function createLineBreakTransformer() {
  * where each output chunk represents a SLIP-encoded packet.
  * @example
  * const rawDataStream = getSomeUint8ArrayStream();
- * const slipEncodedStream = rawDataStream.pipeThrough(new SlipStreamEncoder());
+ * const slipEncodedStream = rawDataStream.pipeThrough(new SLIPDataEncoder());
  */
-export class SlipStreamEncoder extends TransformStream<Uint8Array, Uint8Array> {
+export class SLIPDataEncoder extends TransformStream<Uint8Array, Uint8Array> {
   /**
-   * Constructs a new SlipStreamEncoder.
-   * This sets up the underlying SlipStreamTransformer in "encoding" mode.
+   * Constructs a new SLIPDataEncoder.
+   * This sets up the underlying SLIPDataTransformer in "encoding" mode.
    */
   constructor() {
-    super(new SlipStreamTransformer("encoding"));
+    super(new SLIPDataTransformer("encoding"));
   }
 }
 
@@ -227,14 +227,14 @@ export class SlipStreamEncoder extends TransformStream<Uint8Array, Uint8Array> {
  * decoded SLIP frame (the original data without SLIP framing and escaping).
  * @example
  * const slipEncodedStream = getSomeSlipEncodedStream();
- * const decodedDataStream = slipEncodedStream.pipeThrough(new SlipStreamDecoder());
+ * const decodedDataStream = slipEncodedStream.pipeThrough(new SLIPDataDecoder());
  */
-export class SlipStreamDecoder extends TransformStream<Uint8Array, Uint8Array> {
+export class SLIPDataDecoder extends TransformStream<Uint8Array, Uint8Array> {
   /**
-   * Constructs a new SlipStreamDecoder.
-   * This sets up the underlying SlipStreamTransformer in "decoding" mode.
+   * Constructs a new SLIPDataDecoder.
+   * This sets up the underlying SLIPDataTransformer in "decoding" mode.
    */
   constructor() {
-    super(new SlipStreamTransformer("decoding"));
+    super(new SLIPDataTransformer("decoding"));
   }
 }
