@@ -154,7 +154,7 @@ export function createLineBreakTransformer() {
  * @example
  * const transformedStream = stream.pipeThrough(new SlipStreamEncoder());
  */
-export class SlipStreamEncoder extends TransformStream {
+export class SlipStreamEncoder extends TransformStream<Uint8Array, Uint8Array> {
   constructor() {
     super(new SlipStreamTransformer("encoding"));
   }
@@ -165,7 +165,7 @@ export class SlipStreamEncoder extends TransformStream {
  * @example
  * const transformedStream = stream.pipeThrough(new SlipStreamDecoder());
  */
-export class SlipStreamDecoder extends TransformStream {
+export class SlipStreamDecoder extends TransformStream<Uint8Array, Uint8Array> {
   constructor() {
     super(new SlipStreamTransformer("decoding"));
   }

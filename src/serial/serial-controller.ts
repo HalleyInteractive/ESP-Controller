@@ -1,4 +1,8 @@
-import { createLineBreakTransformer } from "./stream-transformers";
+import {
+  createLineBreakTransformer,
+  SlipStreamEncoder,
+  SlipStreamDecoder,
+} from "./stream-transformers";
 import { sleep } from "../utils/common";
 
 /**
@@ -21,6 +25,7 @@ export interface SerialConnection {
   connected: boolean;
   synced: boolean;
   readable: ReadableStream<Uint8Array> | null;
+  writable: WritableStream<Uint8Array> | null;
   abortStreamController: AbortController | undefined;
 }
 
@@ -34,6 +39,7 @@ export function createSerialConnection() {
     connected: false,
     synced: false,
     readable: null,
+    writable: null,
     abortStreamController: undefined,
   };
 }
@@ -52,6 +58,26 @@ export async function requestPort(
 }
 
 /**
+ * Attaches a slipstream encoder to the writable stream on the connection.
+ * @param connection Serial connection to attach it to.
+ */
+export function attachSlipstreamEncoder(connection: SerialConnection): void {
+  if (!connection.writable || !connection.abortStreamController) {
+    return;
+  }
+  const streamPipeOptions = {
+    signal: connection.abortStreamController.signal,
+    preventCancel: false,
+    preventClose: false,
+    preventAbort: false,
+  };
+  const encoder = new SlipStreamEncoder();
+  encoder.readable.pipeTo(connection.port.writable, streamPipeOptions);
+
+  connection.writable = encoder.writable;
+}
+
+/**
  * Tees the readable stream and returns a data stream with a text and linebreak transformer setup.
  * @param connection Serial connection to add the logStream to.
  * @returns async generator function yielding logs sent to the connection.
@@ -59,10 +85,13 @@ export async function requestPort(
 export function createLogStreamReader(
   connection: SerialConnection,
 ): () => AsyncGenerator<string | undefined, void, unknown> {
-  if (!connection.connected || !connection.readable)
+  if (
+    !connection.connected ||
+    !connection.readable ||
+    !connection.abortStreamController
+  )
     return async function* logStream() {};
 
-  connection.abortStreamController = new AbortController();
   const streamPipeOptions = {
     signal: connection.abortStreamController.signal,
     preventCancel: false,
@@ -73,15 +102,54 @@ export function createLogStreamReader(
   const [newReadable, logReadable] = connection.readable.tee();
   connection.readable = newReadable;
 
-  // 👇 THIS IS THE FIX 👇
-  // Create NEW transformer instances here, inside the function.
-  // Do NOT use global constants for streams that will be piped through.
   const reader = logReadable
     .pipeThrough(new TextDecoderStream(), streamPipeOptions)
     .pipeThrough(createLineBreakTransformer(), streamPipeOptions)
     .getReader();
 
   return async function* logStream() {
+    try {
+      while (connection.connected) {
+        const result = await reader?.read();
+        if (result?.done) return;
+        yield result?.value;
+      }
+    } finally {
+      reader?.releaseLock();
+    }
+  };
+}
+
+/**
+ * Tees the readable stream and returns a data stream with a slip stream transformer set up.
+ * @param connection Serial connection to add the slipstream decoder to.
+ * @returns async generator function yielding command responses sent to the connection.
+ */
+export function createCommandStreamReader(
+  connection: SerialConnection,
+): () => AsyncGenerator<Uint8Array<ArrayBufferLike>, void, unknown> {
+  if (
+    !connection.connected ||
+    !connection.readable ||
+    !connection.abortStreamController
+  )
+    return async function* logStream() {};
+
+  const streamPipeOptions = {
+    signal: connection.abortStreamController.signal,
+    preventCancel: false,
+    preventClose: false,
+    preventAbort: false,
+  };
+
+  const [newReadable, commandReadable] = connection.readable.tee();
+  connection.readable = newReadable;
+
+  const reader = commandReadable
+    .pipeThrough(new SlipStreamDecoder(), streamPipeOptions)
+    .getReader();
+
+  return async function* commandStream() {
     try {
       while (connection.connected) {
         const result = await reader?.read();
@@ -107,6 +175,8 @@ export async function openPort(
   await connection.port.open(options);
   connection.connected = true;
   connection.readable = connection.port.readable;
+  connection.writable = connection.port.writable;
+  connection.abortStreamController = new AbortController();
   return connection;
 }
 
@@ -122,4 +192,22 @@ export async function sendResetPulse(
   await sleep(100);
   connection.port.setSignals({ dataTerminalReady: true, requestToSend: false });
   await sleep(50);
+}
+
+/**
+ * Write data to the connection.
+ */
+export async function writeToConnection(
+  connection: SerialConnection,
+  data: Uint8Array,
+) {
+  if (!connection.writable && connection.port) {
+    attachSlipstreamEncoder(connection);
+  }
+  if (!connection.writable) {
+    return;
+  }
+  const writer = connection.writable.getWriter();
+  await writer.write(data);
+  writer.releaseLock();
 }

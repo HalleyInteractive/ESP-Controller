@@ -63,6 +63,7 @@ describe("Serial Utilities", () => {
       connected: false,
       synced: false,
       readable: null,
+      writable: null,
       abortStreamController: undefined,
     };
   });
@@ -81,6 +82,7 @@ describe("Serial Utilities", () => {
         connected: false,
         synced: false,
         readable: null,
+        writable: null,
         abortStreamController: undefined,
       });
     });
@@ -212,6 +214,7 @@ describe("Serial Utilities", () => {
     it("should tee the readable stream and yield decoded lines", async () => {
       connection.connected = true;
       connection.readable = mockPort.readable;
+      connection.abortStreamController = new AbortController();
       const originalReadable = connection.readable;
 
       const logStream = createLogStreamReader(connection)();
@@ -247,6 +250,7 @@ describe("Serial Utilities", () => {
     it("should stop yielding when connection.connected becomes false", async () => {
       connection.connected = true;
       connection.readable = mockPort.readable;
+      connection.abortStreamController = new AbortController();
       const logStream = createLogStreamReader(connection)();
 
       const receivedLines: (string | undefined)[] = [];
