@@ -24,7 +24,7 @@ export enum EspCommand {
 
 export class EspCommandPacket {
   private packetHeader: Uint8Array = new Uint8Array(8);
-  private packetData: Uint8Array = new Uint8Array();
+  private packetData: Uint8Array = new Uint8Array(0);
 
   set direction(direction: EspPacketDirection) {
     new DataView(this.packetHeader.buffer, 0, 1).setUint8(0, direction);
