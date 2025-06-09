@@ -1,3 +1,5 @@
+import { slipEncode } from "../utils/common";
+
 export enum EspPacketDirection {
   REQUEST = 0x00,
   RESPONSE = 0x01,
@@ -126,6 +128,16 @@ export class EspCommandPacket {
   }
 
   getPacketData(): Uint8Array {
-    return new Uint8Array([...this.packetHeader, ...this.packetData]);
+    const header = new Uint8Array(8);
+    const view = new DataView(header.buffer);
+    view.setUint8(0, this.direction);
+    view.setUint8(1, this.command);
+    view.setUint16(2, this.data.length, true);
+    view.setUint32(4, this.checksum, true);
+    return new Uint8Array([...header, ...this.data]);
+  }
+
+  getSlipStreamEncodedPacketData(): Uint8Array {
+    return slipEncode(this.getPacketData());
   }
 }

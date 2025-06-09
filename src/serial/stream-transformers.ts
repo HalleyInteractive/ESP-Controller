@@ -1,10 +1,4 @@
-/* SLIP special character codes */
-enum SlipStreamBytes {
-  END = 0xc0, // Indicates end of packet
-  ESC = 0xdb, // Indicates byte stuffing
-  ESC_END = 0xdc, // ESC ESC_END means END data byte
-  ESC_ESC = 0xdd, // ESC ESC_ESC means ESC data byte
-}
+import { SlipStreamBytes } from "../utils/common";
 
 /**
  * A generic string logging transformer.

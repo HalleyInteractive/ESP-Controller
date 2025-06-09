@@ -1,9 +1,8 @@
 import {
   createLineBreakTransformer,
-  SlipStreamEncoder,
   SlipStreamDecoder,
 } from "./stream-transformers";
-import { sleep } from "../utils/common";
+import { sleep, toHex } from "../utils/common";
 import {
   EspCommand,
   EspCommandPacket,
@@ -38,6 +37,8 @@ export interface SerialConnection {
   writable: WritableStream<Uint8Array> | null;
   /** An AbortController to signal termination of stream operations. Undefined if not connected. */
   abortStreamController: AbortController | undefined;
+
+  commandResponseStream: ReadableStream<Uint8Array>;
 }
 
 /**
@@ -67,28 +68,6 @@ export async function requestPort(
   connection.port = await navigator.serial.requestPort();
   connection.synced = false;
   return connection;
-}
-
-/**
- * Attaches a SLIP (Serial Line Internet Protocol) encoder to the `connection.writable` stream.
- * This function modifies the `connection.writable` property to use the SLIP encoder,
- * allowing outgoing data to be automatically encoded in the SLIP format.
- * @param connection The SerialConnection object whose writable stream will be wrapped with a SLIP encoder.
- */
-export function attachSlipstreamEncoder(connection: SerialConnection): void {
-  if (!connection.writable || !connection.abortStreamController) {
-    return;
-  }
-  const streamPipeOptions = {
-    signal: connection.abortStreamController.signal,
-    preventCancel: false,
-    preventClose: false,
-    preventAbort: false,
-  };
-  const encoder = new SlipStreamEncoder();
-  encoder.readable.pipeTo(connection.port.writable, streamPipeOptions);
-
-  connection.writable = encoder.writable;
 }
 
 /**
@@ -138,51 +117,6 @@ export function createLogStreamReader(
 }
 
 /**
- * Creates a command stream reader by teeing the `connection.readable` stream.
- * The original `connection.readable` is replaced with one of the new streams.
- * The returned async generator yields `Uint8Array`s, where each array represents
- * a decoded SLIP (Serial Line Internet Protocol) packet received from the serial port.
- * @param connection The SerialConnection object.
- * @returns An async generator function that yields Uint8Array objects representing decoded SLIP packets.
- */
-export function createCommandStreamReader(
-  connection: SerialConnection,
-): () => AsyncGenerator<Uint8Array<ArrayBufferLike>, void, unknown> {
-  if (
-    !connection.connected ||
-    !connection.readable ||
-    !connection.abortStreamController
-  )
-    return async function* logStream() {};
-
-  const streamPipeOptions = {
-    signal: connection.abortStreamController.signal,
-    preventCancel: false,
-    preventClose: false,
-    preventAbort: false,
-  };
-
-  const [newReadable, commandReadable] = connection.readable.tee();
-  connection.readable = newReadable;
-
-  const reader = commandReadable
-    .pipeThrough(new SlipStreamDecoder(), streamPipeOptions)
-    .getReader();
-
-  return async function* commandStream() {
-    try {
-      while (connection.connected) {
-        const result = await reader?.read();
-        if (result?.done) return;
-        yield result?.value;
-      }
-    } finally {
-      reader?.releaseLock();
-    }
-  };
-}
-
-/**
  * Opens the serial port associated with the given SerialConnection object.
  * This function modifies the passed-in connection object by setting `connected` to true,
  * and initializing `readable`, `writable`, and `abortStreamController` properties
@@ -197,10 +131,18 @@ export async function openPort(
 ): Promise<SerialConnection> {
   if (!connection.port) return connection;
   await connection.port.open(options);
+
+  // Tee the main readable stream immediately and only once.
+  const [commandTee, logTee] = connection.port.readable.tee();
+
   connection.connected = true;
-  connection.readable = connection.port.readable;
+  connection.readable = logTee;
   connection.writable = connection.port.writable;
   connection.abortStreamController = new AbortController();
+  connection.commandResponseStream = commandTee.pipeThrough(
+    new SlipStreamDecoder(),
+  );
+
   return connection;
 }
 
@@ -217,7 +159,7 @@ export async function sendResetPulse(
   connection.port.setSignals({ dataTerminalReady: false, requestToSend: true });
   await sleep(100);
   connection.port.setSignals({ dataTerminalReady: true, requestToSend: false });
-  await sleep(50);
+  await sleep(100);
 }
 
 /**
@@ -228,20 +170,20 @@ export async function writeToConnection(
   connection: SerialConnection,
   data: Uint8Array,
 ) {
-  if (!connection.writable && connection.port) {
-    attachSlipstreamEncoder(connection);
+  // Add this trace log to see the exact bytes being sent
+  console.log(`TRACE Write: ${data.length} bytes: ${toHex(data)}`);
+
+  if (connection.writable) {
+    const writer = connection.writable.getWriter();
+    await writer.write(data);
+    writer.releaseLock();
   }
-  if (!connection.writable) {
-    return;
-  }
-  const writer = connection.writable.getWriter();
-  await writer.write(data);
-  writer.releaseLock();
 }
 
 export async function syncEsp(connection: SerialConnection): Promise<boolean> {
   await sendResetPulse(connection);
   const maxAttempts = 10;
+  const timeoutPerAttempt = 500; // ms
 
   const syncCommand = new EspCommandPacket();
   syncCommand.command = EspCommand.SYNC;
@@ -254,26 +196,58 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
   syncCommand.checksum = 0;
 
   for (let i = 0; i < maxAttempts; i++) {
-    await writeToConnection(connection, syncCommand.getPacketData());
+    console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
+    await writeToConnection(
+      connection,
+      syncCommand.getSlipStreamEncodedPacketData(),
+    );
 
-    const responseReader = createCommandStreamReader(connection)();
-    let response;
-    for (let x = 0; x < 10; x++) {
-      response = await Promise.race([responseReader.next(), sleep(100)]);
-      console.log("RESPONSE", response);
-    }
+    let responseReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
-    const responsePacket = new EspCommandPacket();
-    if (response?.value) {
-      responsePacket.parseResponse(response.value);
-      if (responsePacket.command === EspCommand.SYNC) {
-        console.log("SYNCED", response);
-        return true;
+    try {
+      responseReader = connection.commandResponseStream.getReader();
+
+      const timeoutPromise = sleep(timeoutPerAttempt).then(() => {
+        throw new Error(`Timeout after ${timeoutPerAttempt}ms`);
+      });
+
+      while (true) {
+        // Corrected: Use responseReader.read() instead of .next()
+        const result = await Promise.race([
+          responseReader.read(),
+          timeoutPromise,
+        ]);
+
+        const { value, done } = result;
+
+        if (done) {
+          break; // The stream was closed.
+        }
+
+        if (value) {
+          const responsePacket = new EspCommandPacket();
+          responsePacket.parseResponse(value);
+
+          if (responsePacket.command === EspCommand.SYNC) {
+            console.log("SYNCED successfully.", responsePacket);
+            connection.synced = true;
+            return true; // Success! The finally block will still execute.
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`Sync attempt ${i + 1} timed out.`, e);
+    } finally {
+      // Ensure the reader lock is always released, even on timeout or success.
+      if (responseReader) {
+        responseReader.releaseLock();
       }
     }
-    console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
-    await sleep(500);
-    continue;
+
+    await sleep(100);
   }
+
+  console.log("Failed to sync with the device.");
+  connection.synced = false;
   return false;
 }

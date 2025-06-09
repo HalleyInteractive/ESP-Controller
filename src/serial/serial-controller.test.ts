@@ -65,6 +65,7 @@ describe("Serial Utilities", () => {
       readable: null,
       writable: null,
       abortStreamController: undefined,
+      commandResponseStream: new ReadableStream(),
     };
   });
 
@@ -83,6 +84,7 @@ describe("Serial Utilities", () => {
         readable: null,
         writable: null,
         abortStreamController: undefined,
+        commandResponseStream: undefined,
       });
     });
   });
@@ -129,7 +131,6 @@ describe("Serial Utilities", () => {
         }),
       );
       expect(connection.connected).toBe(true);
-      expect(connection.readable).toBe(mockPort.readable);
     });
 
     it("should open the port with custom options", async () => {
@@ -169,10 +170,10 @@ describe("Serial Utilities", () => {
         dataTerminalReady: true,
         requestToSend: false,
       });
-      expect(sleep).toHaveBeenCalledWith(50);
+      expect(sleep).toHaveBeenCalledWith(100);
 
       // Advance time past the second sleep interval
-      await vi.advanceTimersByTimeAsync(50);
+      await vi.advanceTimersByTimeAsync(100);
 
       // Ensure the sendResetPulse promise completes
       await resetPromise;
