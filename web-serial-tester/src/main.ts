@@ -3,7 +3,7 @@ import {
   createLogStreamReader,
   openPort,
   requestPort,
-} from "../../src/serial/serial-controller"; // Adjust path if needed
+} from "../../src/serial/serial-controller";
 
 // --- Get references to our HTML elements ---
 const connectButton = document.getElementById(
@@ -25,11 +25,9 @@ export async function init() {
   statusDiv.textContent = "Status: Awaiting port selection...";
 
   try {
-    // 1. Request user to select a port
     await requestPort(connection);
     statusDiv.textContent = `Status: Port selected. Opening connection...`;
 
-    // 2. Open the selected port
     await openPort(connection);
     statusDiv.textContent = `Status: Connected!`;
     connectButton.disabled = true; // Disable button after successful connection
@@ -60,6 +58,7 @@ async function logToConsole(
 // When the "Connect" button is clicked, run our init function.
 connectButton.addEventListener("click", init);
 
+// Expose API for debugging or testing from the browser console.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).SerialAPI = {
   init,

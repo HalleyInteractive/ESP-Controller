@@ -37,7 +37,6 @@ describe("crc32", () => {
     expect(result).toEqual(expected);
   });
 
-  // 👇 CORRECTED TEST CASE
   it("should compute the correct CRC32 for a buffer with various byte values", () => {
     const input = new Uint8Array([
       0x01, 0x02, 0x03, 0x04, 0x05, 0x00, 0xff, 0xfe,
@@ -48,7 +47,6 @@ describe("crc32", () => {
     expect(result).toEqual(expected);
   });
 
-  // 👇 CORRECTED TEST CASE
   it("should handle buffers with a length not divisible by 8", () => {
     const input = textEncoder.encode("short"); // length 5
     // The correct CRC32 for "short" is 0x8f2890a2

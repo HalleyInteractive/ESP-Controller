@@ -18,20 +18,26 @@ const DEFAULT_ESP32_SERIAL_OPTIONS: SerialOptions = {
 };
 
 /**
- * Serial connection interface.
+ * Interface defining the properties of a serial connection.
  */
 export interface SerialConnection {
+  /** The underlying SerialPort object. Undefined if no port is selected. */
   port: SerialPort | undefined;
+  /** Indicates if the serial port is currently open and connected. */
   connected: boolean;
+  /** Indicates if the connection has been synchronized with the device. */
   synced: boolean;
+  /** The readable stream for receiving data from the serial port. Null if not connected. */
   readable: ReadableStream<Uint8Array> | null;
+  /** The writable stream for sending data to the serial port. Null if not connected. */
   writable: WritableStream<Uint8Array> | null;
+  /** An AbortController to signal termination of stream operations. Undefined if not connected. */
   abortStreamController: AbortController | undefined;
 }
 
 /**
- * Creates an empty Serial Connection object.
- * @returns Empty state Serial Connection object.
+ * Creates an empty SerialConnection object with default initial values.
+ * @returns A new SerialConnection object with its properties initialized.
  */
 export function createSerialConnection() {
   return {
@@ -45,9 +51,10 @@ export function createSerialConnection() {
 }
 
 /**
- * Requests a new serial port from the navigator.
- * @param connection Serial Connection object to assign port to.
- * @returns The Serial Connection object.
+ * Prompts the user to select a serial port and assigns it to the provided connection object.
+ * This function modifies the `connection.port` property and sets `connection.synced` to `false`.
+ * @param connection The SerialConnection object to which the requested port will be assigned.
+ * @returns A Promise that resolves with the modified SerialConnection object.
  */
 export async function requestPort(
   connection: SerialConnection,
@@ -58,8 +65,10 @@ export async function requestPort(
 }
 
 /**
- * Attaches a slipstream encoder to the writable stream on the connection.
- * @param connection Serial connection to attach it to.
+ * Attaches a SLIP (Serial Line Internet Protocol) encoder to the `connection.writable` stream.
+ * This function modifies the `connection.writable` property to use the SLIP encoder,
+ * allowing outgoing data to be automatically encoded in the SLIP format.
+ * @param connection The SerialConnection object whose writable stream will be wrapped with a SLIP encoder.
  */
 export function attachSlipstreamEncoder(connection: SerialConnection): void {
   if (!connection.writable || !connection.abortStreamController) {
@@ -78,9 +87,12 @@ export function attachSlipstreamEncoder(connection: SerialConnection): void {
 }
 
 /**
- * Tees the readable stream and returns a data stream with a text and linebreak transformer setup.
- * @param connection Serial connection to add the logStream to.
- * @returns async generator function yielding logs sent to the connection.
+ * Creates a log stream reader by teeing the `connection.readable` stream.
+ * The original `connection.readable` is replaced with one of the new streams.
+ * The returned async generator yields strings, where each string is a line of text
+ * received from the serial port, decoded as UTF-8, and split by line breaks.
+ * @param connection The SerialConnection object.
+ * @returns An async generator function that yields log strings from the connection.
  */
 export function createLogStreamReader(
   connection: SerialConnection,
@@ -121,9 +133,12 @@ export function createLogStreamReader(
 }
 
 /**
- * Tees the readable stream and returns a data stream with a slip stream transformer set up.
- * @param connection Serial connection to add the slipstream decoder to.
- * @returns async generator function yielding command responses sent to the connection.
+ * Creates a command stream reader by teeing the `connection.readable` stream.
+ * The original `connection.readable` is replaced with one of the new streams.
+ * The returned async generator yields `Uint8Array`s, where each array represents
+ * a decoded SLIP (Serial Line Internet Protocol) packet received from the serial port.
+ * @param connection The SerialConnection object.
+ * @returns An async generator function that yields Uint8Array objects representing decoded SLIP packets.
  */
 export function createCommandStreamReader(
   connection: SerialConnection,
@@ -163,9 +178,13 @@ export function createCommandStreamReader(
 }
 
 /**
- * Opens the port on a serial connection port.
- * @param connection SerialConnection object to open the port on.
- * @param options SerialOptions object, if not passed it will default to DEFAULT_ESP32_SERIAL_OPTIONS.
+ * Opens the serial port associated with the given SerialConnection object.
+ * This function modifies the passed-in connection object by setting `connected` to true,
+ * and initializing `readable`, `writable`, and `abortStreamController` properties
+ * upon successful opening of the port. It also returns the modified connection object.
+ * @param connection The SerialConnection object for which the port is to be opened.
+ * @param options Optional SerialOptions to configure the port. Defaults to `DEFAULT_ESP32_SERIAL_OPTIONS`.
+ * @returns A Promise that resolves with the modified SerialConnection object.
  */
 export async function openPort(
   connection: SerialConnection,
@@ -181,8 +200,10 @@ export async function openPort(
 }
 
 /**
- * Send a reset pulse by setting dataTerminial false then true.
- * @param connection A serial connection with a connected port.
+ * Sends a reset pulse to the connected device by toggling the DTR (Data Terminal Ready)
+ * and RTS (Request To Send) signals. This sequence is often used to put microcontrollers
+ * like ESP32 into bootloader mode, allowing for firmware updates or other programming operations.
+ * @param connection A SerialConnection object with an active and connected port.
  */
 export async function sendResetPulse(
   connection: SerialConnection,
@@ -195,7 +216,8 @@ export async function sendResetPulse(
 }
 
 /**
- * Write data to the connection.
+ * Asynchronously writes a Uint8Array to the serial connection's writable stream.
+ * Attaches a SLIP encoder if one is not already present and the port is available.
  */
 export async function writeToConnection(
   connection: SerialConnection,
