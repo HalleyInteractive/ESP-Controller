@@ -12,7 +12,6 @@ export class EspCommandReadReg extends EspCommandPacket {
 
     this.command = EspCommand.READ_REG;
     this.direction = EspPacketDirection.REQUEST;
-    console.log(`Read reg from address ${address}`);
     new DataView(this.readRegData).setUint32(0, address, true);
     this.data = new Uint8Array(this.readRegData);
   }

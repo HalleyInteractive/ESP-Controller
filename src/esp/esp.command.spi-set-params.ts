@@ -4,7 +4,7 @@ import {
   EspPacketDirection,
 } from "./esp.command";
 
-export class EspCommandSetSpiParams extends EspCommandPacket {
+export class EspCommandSpiSetParams extends EspCommandPacket {
   private paramsData = new ArrayBuffer(24);
   private id = new DataView(this.paramsData, 0, 4);
   private totalSize = new DataView(this.paramsData, 4, 4);
@@ -22,7 +22,7 @@ export class EspCommandSetSpiParams extends EspCommandPacket {
     this.blockSize.setUint32(0, 0x10000, true);
     this.sectorSize.setUint32(0, 0x1000, true);
     this.pageSize.setUint32(0, 0x100, true);
-    this.statusMask.setUint32(0, 0xffff, true);
+    this.statusMask.setUint32(0, 0xffffffff, true);
     this.data = new Uint8Array(this.paramsData);
   }
 }
