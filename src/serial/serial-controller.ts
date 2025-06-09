@@ -3,11 +3,8 @@ import {
   SlipStreamDecoder,
 } from "./stream-transformers";
 import { sleep, toHex } from "../utils/common";
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "../esp/esp.command";
+import { EspCommand, EspCommandPacket } from "../esp/esp.command";
+import { EspCommandSync } from "../esp/esp.command.sync";
 
 /**
  * Default serial options when connecting to an ESP32.
@@ -37,7 +34,7 @@ export interface SerialConnection {
   writable: WritableStream<Uint8Array> | null;
   /** An AbortController to signal termination of stream operations. Undefined if not connected. */
   abortStreamController: AbortController | undefined;
-
+  /** A readable stream that contains the slipstream decoded responses from the esp. */
   commandResponseStream: ReadableStream<Uint8Array>;
 }
 
@@ -185,15 +182,7 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
   const maxAttempts = 10;
   const timeoutPerAttempt = 500; // ms
 
-  const syncCommand = new EspCommandPacket();
-  syncCommand.command = EspCommand.SYNC;
-  syncCommand.direction = EspPacketDirection.REQUEST;
-  syncCommand.data = new Uint8Array([
-    0x07, 0x07, 0x12, 0x20, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-    0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
-  ]);
-  syncCommand.checksum = 0;
+  const syncCommand = new EspCommandSync();
 
   for (let i = 0; i < maxAttempts; i++) {
     console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
@@ -212,7 +201,6 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
       });
 
       while (true) {
-        // Corrected: Use responseReader.read() instead of .next()
         const result = await Promise.race([
           responseReader.read(),
           timeoutPromise,
@@ -221,7 +209,7 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
         const { value, done } = result;
 
         if (done) {
-          break; // The stream was closed.
+          break;
         }
 
         if (value) {
@@ -231,7 +219,7 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
           if (responsePacket.command === EspCommand.SYNC) {
             console.log("SYNCED successfully.", responsePacket);
             connection.synced = true;
-            return true; // Success! The finally block will still execute.
+            return true;
           }
         }
       }
