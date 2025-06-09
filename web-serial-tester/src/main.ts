@@ -1,9 +1,11 @@
+import { ESPImage } from "../../src/image/esp.image";
 import {
   createSerialConnection,
   createLogStreamReader,
   openPort,
   requestPort,
   syncEsp,
+  flashImage,
 } from "../../src/serial/serial-controller";
 
 // --- Get references to our HTML elements ---
@@ -46,6 +48,15 @@ export async function init() {
   }
 }
 
+async function flashTestImage() {
+  const image = new ESPImage();
+  image.addBootloader("./binary/bootloader.bin");
+  image.addPartitionTable("./binary/partition-table.bin");
+  image.addApp("./binary/simple.bin");
+
+  await flashImage(connection, image);
+}
+
 async function logToConsole(
   logStreamReader: () => AsyncGenerator<string | undefined, void, unknown>,
 ) {
@@ -65,6 +76,7 @@ connectButton.addEventListener("click", init);
   init,
   connection,
   syncEsp,
+  flashTestImage,
 };
 
 statusDiv.textContent = "Status: Ready. Click the button to connect.";

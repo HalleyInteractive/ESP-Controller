@@ -52,8 +52,8 @@ describe("ESPImage", () => {
     const mockPartition1 = { load: vi.fn().mockResolvedValue(true) };
     const mockPartition2 = { load: vi.fn().mockResolvedValue(true) };
 
-    image.addPartition(mockPartition1 as any);
-    image.addPartition(mockPartition2 as any);
+    image.addPartition(mockPartition1 as unknown as BinFilePartition);
+    image.addPartition(mockPartition2 as unknown as BinFilePartition);
 
     await image.load();
 

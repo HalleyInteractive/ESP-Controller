@@ -3,8 +3,18 @@ import {
   SlipStreamDecoder,
 } from "./stream-transformers";
 import { sleep, toHex } from "../utils/common";
-import { EspCommand, EspCommandPacket } from "../esp/esp.command";
+import {
+  EspCommand,
+  EspCommandPacket,
+  EspPacketDirection,
+} from "../esp/esp.command";
 import { EspCommandSync } from "../esp/esp.command.sync";
+import { EspCommandSpiAttach } from "../esp/esp.command.spi-attach";
+import { EspCommandSpiSetParams } from "../esp/esp.command.spi-set-params";
+import { ESPImage } from "../image/esp.image";
+import { EspCommandFlashData } from "../esp/esp.command.flash-data";
+import { EspCommandFlashBegin } from "../esp/esp.command.flash-begin";
+import { Partition } from "../image/esp.partition";
 
 /**
  * Default serial options when connecting to an ESP32.
@@ -35,14 +45,14 @@ export interface SerialConnection {
   /** An AbortController to signal termination of stream operations. Undefined if not connected. */
   abortStreamController: AbortController | undefined;
   /** A readable stream that contains the slipstream decoded responses from the esp. */
-  commandResponseStream: ReadableStream<Uint8Array>;
+  commandResponseStream: ReadableStream<Uint8Array> | undefined;
 }
 
 /**
  * Creates an empty SerialConnection object with default initial values.
  * @returns A new SerialConnection object with its properties initialized.
  */
-export function createSerialConnection() {
+export function createSerialConnection(): SerialConnection {
   return {
     port: undefined,
     connected: false,
@@ -50,6 +60,7 @@ export function createSerialConnection() {
     readable: null,
     writable: null,
     abortStreamController: undefined,
+    commandResponseStream: undefined,
   };
 }
 
@@ -167,8 +178,8 @@ export async function writeToConnection(
   connection: SerialConnection,
   data: Uint8Array,
 ) {
-  // Add this trace log to see the exact bytes being sent
-  console.log(`TRACE Write: ${data.length} bytes: ${toHex(data)}`);
+  // Add trace log to see the exact bytes being sent
+  // console.log(`TRACE Write: ${data.length} bytes: ${toHex(data)}`);
 
   if (connection.writable) {
     const writer = connection.writable.getWriter();
@@ -238,4 +249,168 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
   console.log("Failed to sync with the device.");
   connection.synced = false;
   return false;
+}
+
+/**
+ * Reads a response from the command stream, waiting for a specific command type.
+ * @param connection - The active serial connection.
+ * @param expectedCommand - The command we are expecting a response for.
+ * @param timeout - The maximum time to wait for a response in milliseconds.
+ * @returns A promise that resolves with the parsed response packet.
+ * @throws If a timeout occurs or an error response is received.
+ */
+async function readResponse(
+  connection: SerialConnection,
+  expectedCommand: EspCommand,
+  timeout = 2000,
+): Promise<EspCommandPacket> {
+  let responseReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+  try {
+    responseReader = connection.commandResponseStream.getReader();
+    const timeoutPromise = sleep(timeout).then(() => {
+      throw new Error(
+        `Timeout: No response received for command ${EspCommand[expectedCommand]} within ${timeout}ms.`,
+      );
+    });
+
+    while (true) {
+      const { value, done } = await Promise.race([
+        responseReader.read(),
+        timeoutPromise,
+      ]);
+
+      if (done) {
+        throw new Error("Stream closed unexpectedly while awaiting response.");
+      }
+
+      if (value) {
+        const responsePacket = new EspCommandPacket();
+        responsePacket.parseResponse(value);
+
+        if (
+          responsePacket.direction === EspPacketDirection.RESPONSE &&
+          responsePacket.command === expectedCommand
+        ) {
+          if (responsePacket.error > 0) {
+            throw new Error(
+              `Device returned error for ${
+                EspCommand[expectedCommand]
+              }: ${responsePacket.getErrorMessage(responsePacket.error)}`,
+            );
+          }
+          return responsePacket;
+        }
+      }
+    }
+  } finally {
+    if (responseReader) {
+      responseReader.releaseLock();
+    }
+  }
+}
+
+/**
+ * Flashes a single partition's binary data to the device.
+ * @param connection - The active and synced serial connection.
+ * @param partition - The partition to flash.
+ */
+export async function flashPartition(
+  connection: SerialConnection,
+  partition: Partition,
+) {
+  console.log(
+    `Flashing partition: ${partition.filename}, offset: ${toHex(
+      new Uint8Array(new Uint32Array([partition.offset]).buffer),
+    )}`,
+  );
+  const packetSize = 4096; // Standard flash block size
+  const numPackets = Math.ceil(partition.binary.length / packetSize);
+
+  // 1. Send FLASH_BEGIN command
+  const flashBeginCmd = new EspCommandFlashBegin(
+    partition.binary,
+    partition.offset,
+    packetSize,
+    numPackets,
+  );
+  await writeToConnection(
+    connection,
+    flashBeginCmd.getSlipStreamEncodedPacketData(),
+  );
+  await readResponse(connection, EspCommand.FLASH_BEGIN);
+  console.log("FLASH_BEGIN successful.");
+
+  // 2. Send all FLASH_DATA packets
+  for (let i = 0; i < numPackets; i++) {
+    const flashDataCmd = new EspCommandFlashData(
+      partition.binary,
+      i,
+      packetSize,
+    );
+    await writeToConnection(
+      connection,
+      flashDataCmd.getSlipStreamEncodedPacketData(),
+    );
+    console.log(`[${partition.filename}] Writing block ${i + 1}/${numPackets}`);
+    // Increase timeout for data flashing as it can be slow
+    await readResponse(connection, EspCommand.FLASH_DATA, 5000);
+  }
+  console.log(`Flash data for ${partition.filename} sent successfully.`);
+}
+
+/**
+ * Manages the entire process of flashing an image, including all its partitions.
+ * @param connection - The active serial connection.
+ * @param image - The ESPImage object containing all partitions to be flashed.
+ * @throws If the device is not connected or fails to sync.
+ */
+export async function flashImage(
+  connection: SerialConnection,
+  image: ESPImage,
+) {
+  if (!connection.connected) {
+    throw new Error("Device is not connected.");
+  }
+
+  // 1. Sync with the device
+  if (!connection.synced) {
+    const synced = await syncEsp(connection);
+    if (!synced) {
+      throw new Error(
+        "ESP32 Needs to Sync before flashing. Hold the `boot` button on the device during sync attempts.",
+      );
+    }
+  }
+
+  // 2. Load all partition binaries from files
+  console.log("Loading binary files...");
+  await image.load();
+
+  // 3. Send SPI_ATTACH command
+  const attachCmd = new EspCommandSpiAttach();
+  await writeToConnection(
+    connection,
+    attachCmd.getSlipStreamEncodedPacketData(),
+  );
+  await readResponse(connection, EspCommand.SPI_ATTACH);
+  console.log("SPI_ATTACH successful.");
+
+  // 4. Send SPI_SET_PARAMS command
+  const setParamsCmd = new EspCommandSpiSetParams();
+  await writeToConnection(
+    connection,
+    setParamsCmd.getSlipStreamEncodedPacketData(),
+  );
+  await readResponse(connection, EspCommand.SPI_SET_PARAMS);
+  console.log("SPI_SET_PARAMS successful.");
+
+  // 5. Flash each partition
+  for (const partition of image.partitions) {
+    await flashPartition(connection, partition);
+  }
+
+  // 6. Reset the device to run the new image
+  console.log("Flashing complete. Resetting device...");
+  await sendResetPulse(connection);
+  console.log("Device has been reset.");
 }
