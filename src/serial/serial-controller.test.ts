@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   createLogStreamReader,
-  createSerialConnection, // 👈 Added import
+  createSerialConnection,
   openPort,
-  requestPort, // 👈 Added import
+  requestPort,
   sendResetPulse,
   type SerialConnection,
-} from "./serial-controller"; // Adjust the import path to your file
-import { sleep } from "../utils/common"; // Adjust the import path for sleep
+} from "./serial-controller";
+import { sleep } from "../utils/common";
 
 // Mock the sleep utility function
 vi.mock("../utils/common", () => ({
@@ -73,7 +73,6 @@ describe("Serial Utilities", () => {
     vi.clearAllMocks();
   });
 
-  // 👇 New test suite for createSerialConnection
   describe("createSerialConnection", () => {
     it("should return a new serial connection object with default values", () => {
       const newConnection = createSerialConnection();
@@ -88,7 +87,6 @@ describe("Serial Utilities", () => {
     });
   });
 
-  // 👇 New test suite for requestPort
   describe("requestPort", () => {
     const mockNewPort = createMockSerialPort();
 
@@ -108,7 +106,7 @@ describe("Serial Utilities", () => {
 
     it("should request a port from the navigator and update the connection state", async () => {
       const conn = createSerialConnection();
-      conn.synced = true; // Set to true to test that it gets reset
+      conn.synced = true; // Set to true to test that it gets reset by requestPort
 
       await requestPort(conn);
 
@@ -123,7 +121,7 @@ describe("Serial Utilities", () => {
       await openPort(connection);
 
       expect(mockPort.open).toHaveBeenCalledTimes(1);
-      // Check that the default options were used
+      // Check that the default options were used when none are provided
       expect(mockPort.open).toHaveBeenCalledWith(
         expect.objectContaining({
           baudRate: 115200,
@@ -156,27 +154,27 @@ describe("Serial Utilities", () => {
       const setSignalsSpy = vi.spyOn(mockPort, "setSignals");
       const resetPromise = sendResetPulse(connection);
 
-      // Check initial call
+      // Check initial signal state for reset
       expect(setSignalsSpy).toHaveBeenCalledWith({
         dataTerminalReady: false,
         requestToSend: true,
       });
       expect(sleep).toHaveBeenCalledWith(100);
 
-      // Advance time past the first sleep
+      // Advance time past the first sleep interval
       await vi.advanceTimersByTimeAsync(100);
 
-      // Check second call
+      // Check second signal state for reset
       expect(setSignalsSpy).toHaveBeenCalledWith({
         dataTerminalReady: true,
         requestToSend: false,
       });
       expect(sleep).toHaveBeenCalledWith(50);
 
-      // Advance time past the second sleep
+      // Advance time past the second sleep interval
       await vi.advanceTimersByTimeAsync(50);
 
-      // Ensure the entire async function completes
+      // Ensure the sendResetPulse promise completes
       await resetPromise;
 
       expect(setSignalsSpy).toHaveBeenCalledTimes(2);

@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
 
+// This file configures the Vitest test runner.
 export default defineConfig({
   test: {
+    // Enables global test APIs (describe, it, etc.) without importing them.
     globals: true,
     environment: "node",
     coverage: {

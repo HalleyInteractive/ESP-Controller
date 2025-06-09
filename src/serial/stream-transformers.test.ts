@@ -30,14 +30,12 @@ describe("LoggingTransformer", () => {
     const writer = transformer.writable.getWriter();
     const testChunk = "hello world";
 
-    // 1. Start reading and get the promise for the result
+    // Initiate read before writing to ensure the stream is actively pulling.
     const readPromise = reader.read();
 
-    // 2. Write to the stream and close it
     await writer.write(testChunk);
-    await writer.close();
+    await writer.close(); // Close the writer to end the stream
 
-    // 3. Now await the result from the read promise
     const { value } = await readPromise;
 
     expect(consoleSpy).toHaveBeenCalledWith("STREAM LOG: ", testChunk);
@@ -55,14 +53,12 @@ describe("Uint8LoggingTransformer", () => {
     const writer = transformer.writable.getWriter();
     const testChunk = new Uint8Array([1, 2, 3]);
 
-    // 1. Start reading and get the promise for the result
+    // Initiate read before writing to ensure the stream is actively pulling.
     const readPromise = reader.read();
 
-    // 2. Write to the stream and close it
     await writer.write(testChunk);
-    await writer.close();
+    await writer.close(); // Close the writer to end the stream
 
-    // 3. Now await the result from the read promise
     const { value } = await readPromise;
 
     expect(consoleSpy).toHaveBeenCalledWith("UINT8 STREAM LOG: ", testChunk);

@@ -54,12 +54,14 @@ const crc32Table: number[] = [
 /**
  * Calculates a standard CRC32 checksum.
  * This is a standard, byte-by-byte table-lookup implementation.
+ * @param buf The input data as a Uint8Array.
+ * @param seed The initial CRC value. Defaults to 0xFFFFFFFF.
+ * @returns A 4-byte Uint8Array representing the CRC32 checksum in little-endian order.
  */
 export function crc32(buf: Uint8Array, seed = 0xffffffff): Uint8Array {
   // For a standard single-table algorithm, the initial value C should be the seed itself.
   let C = seed;
 
-  // Process the buffer byte by byte.
   for (let i = 0; i < buf.length; ++i) {
     C = (C >>> 8) ^ crc32Table[(C ^ buf[i]) & 0xff];
   }
@@ -67,7 +69,6 @@ export function crc32(buf: Uint8Array, seed = 0xffffffff): Uint8Array {
   // The final post-inversion is part of the standard algorithm.
   C = C ^ -1;
 
-  // Create and return the result buffer.
   const buffer = new ArrayBuffer(4);
   const view = new DataView(buffer);
   view.setUint32(0, C, true); // Write the final 32-bit integer in little-endian format.
