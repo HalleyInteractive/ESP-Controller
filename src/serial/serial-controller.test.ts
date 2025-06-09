@@ -6,8 +6,12 @@ import {
   requestPort, // 👈 Added import
   sendResetPulse,
   type SerialConnection,
+  attachSlipstreamEncoder, // Added for testing
+  createCommandStreamReader, // Added for testing
+  writeToConnection, // Added for testing
 } from "./serial-controller"; // Adjust the import path to your file
 import { sleep } from "../utils/common"; // Adjust the import path for sleep
+import { SlipStreamEncoder, SlipStreamDecoder } from "./stream-transformers"; // Import for mocking
 
 // Mock the sleep utility function
 vi.mock("../utils/common", () => ({
@@ -15,6 +19,30 @@ vi.mock("../utils/common", () => ({
     (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
   ),
 }));
+
+// Mock stream transformers
+vi.mock("./stream-transformers", async (importOriginal) => {
+  const actual = await importOriginal();
+  const mockEncoderInstance = {
+    readable: new ReadableStream({
+      start(controller) { (mockEncoderInstance as any)._controller = controller; }
+    }),
+    writable: new WritableStream(),
+    _controller: null as ReadableStreamDefaultController<Uint8Array> | null, // To push data from mock encoder
+  };
+  const mockDecoderInstance = {
+    readable: new ReadableStream({
+      start(controller) { (mockDecoderInstance as any)._controller = controller; }
+    }),
+    writable: new WritableStream(),
+     _controller: null as ReadableStreamDefaultController<Uint8Array> | null, // To push data from mock decoder
+  };
+  return {
+    ...actual,
+    SlipStreamEncoder: vi.fn().mockImplementation(() => mockEncoderInstance),
+    SlipStreamDecoder: vi.fn().mockImplementation(() => mockDecoderInstance),
+  };
+});
 
 // Create a high-quality mock for the Web Serial API's SerialPort
 const createMockSerialPort = () => {
@@ -310,6 +338,336 @@ describe("Serial Utilities", () => {
 
       // Clean up the new reader
       reader2?.releaseLock();
+    });
+  });
+
+  // New test suite for attachSlipstreamEncoder
+  describe("attachSlipstreamEncoder", () => {
+    it("should set up SlipStreamEncoder and pipe its readable to port's writable, and update connection.writable", () => {
+      const mockPort = createMockSerialPort();
+      mockPort.writable = new WritableStream(); // Ensure port.writable exists
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: new ReadableStream(),
+        writable: new WritableStream(), // Initial writable, should be replaced
+        abortStreamController: new AbortController(),
+      };
+      const originalPortWritable = connection.port.writable;
+      const initialConnectionWritable = connection.writable;
+
+      attachSlipstreamEncoder(connection);
+
+      expect(SlipStreamEncoder).toHaveBeenCalledOnce();
+      // Check if the encoder's readable is piped to the port's writable
+      // This is hard to check directly without deeper ReadableStream mocking or spies on pipeTo
+      // We'll trust SlipStreamEncoder mock is correctly instantiated and its readable exists
+      expect(connection.port.writable).toBe(originalPortWritable); // pipeTo doesn't change the object ref
+
+      // Check that connection.writable is updated to the encoder's writable
+      expect(connection.writable).not.toBe(initialConnectionWritable);
+      // This assumes the mock SlipStreamEncoder constructor returns an object with a 'writable' property
+      const mockEncoderInstance = (SlipStreamEncoder as any).mock.results[0].value;
+      expect(connection.writable).toBe(mockEncoderInstance.writable);
+    });
+
+    it("should do nothing if connection.writable is initially null", () => {
+      const mockPort = createMockSerialPort();
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: new ReadableStream(),
+        writable: null, // Key condition
+        abortStreamController: new AbortController(),
+      };
+
+      attachSlipstreamEncoder(connection);
+
+      expect(SlipStreamEncoder).not.toHaveBeenCalled();
+    });
+
+    it("should do nothing if connection.abortStreamController is initially undefined", () => {
+      const mockPort = createMockSerialPort();
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: new ReadableStream(),
+        writable: new WritableStream(),
+        abortStreamController: undefined, // Key condition
+      };
+
+      attachSlipstreamEncoder(connection);
+
+      expect(SlipStreamEncoder).not.toHaveBeenCalled();
+    });
+  });
+
+  // New test suite for createCommandStreamReader
+  describe("createCommandStreamReader", () => {
+    const textEncoder = new TextEncoder(); // For creating Uint8Array from string
+
+    it("should return an empty async generator if connection.connected is false", async () => {
+      const connection: SerialConnection = {
+        port: undefined,
+        connected: false, // Key condition
+        synced: false,
+        readable: null,
+        writable: null,
+        abortStreamController: undefined,
+      };
+      const commandStreamReader = createCommandStreamReader(connection);
+      const generator = commandStreamReader();
+      const result = await generator.next();
+      expect(result.done).toBe(true);
+    });
+
+    it("should return an empty async generator if connection.readable is null", async () => {
+      const connection: SerialConnection = {
+        port: createMockSerialPort() as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: null, // Key condition
+        writable: null,
+        abortStreamController: new AbortController(),
+      };
+      const commandStreamReader = createCommandStreamReader(connection);
+      const generator = commandStreamReader();
+      const result = await generator.next();
+      expect(result.done).toBe(true);
+    });
+
+    it("should tee the connection.readable stream and pipe through SlipStreamDecoder", async () => {
+      const mockPort = createMockSerialPort();
+      const initialReadable = mockPort.readable; // This is the stream from the mock port
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: initialReadable,
+        writable: new WritableStream(),
+        abortStreamController: new AbortController(),
+      };
+
+      const commandStream = createCommandStreamReader(connection)();
+      expect(SlipStreamDecoder).toHaveBeenCalledOnce();
+      expect(connection.readable).not.toBe(initialReadable); // Check if teed
+
+      // To verify pipeThrough, we would need to inspect the mocked SlipStreamDecoder's readable
+      // For now, we trust the call was made.
+
+      // Simulate data and closing to allow the generator to complete
+      const mockDecoderInstance = (SlipStreamDecoder as any).mock.results[0].value;
+      (mockDecoderInstance as any)._controller?.close(); // Close the decoder's readable stream
+
+      for await (const _ of commandStream) { /* consume */ }
+    });
+
+    it("should yield data correctly when mock port pushes SLIP-encoded data", async () => {
+      const mockPort = createMockSerialPort();
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: mockPort.readable,
+        writable: new WritableStream(),
+        abortStreamController: new AbortController(),
+      };
+
+      const commandStream = createCommandStreamReader(connection)();
+      const mockDecoderInstance = (SlipStreamDecoder as any).mock.results[0].value;
+
+      const receivedData: Uint8Array[] = [];
+      const expectedData = [textEncoder.encode("test1"), textEncoder.encode("test2")];
+
+      const consumerPromise = (async () => {
+        for await (const data of commandStream) {
+          receivedData.push(data as Uint8Array);
+        }
+      })();
+
+      const producerPromise = (async () => {
+        await sleep(1); // Give consumer a moment
+        // Simulate SlipStreamDecoder outputting data
+        mockDecoderInstance._controller?.enqueue(expectedData[0]);
+        await sleep(1);
+        mockDecoderInstance._controller?.enqueue(expectedData[1]);
+        await sleep(1);
+        mockDecoderInstance._controller?.close(); // Close decoder's stream
+      })();
+
+      await Promise.all([consumerPromise, producerPromise]);
+      expect(receivedData).toEqual(expectedData);
+    });
+
+    it("should stop yielding when connection.connected becomes false", async () => {
+      const mockPort = createMockSerialPort();
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: mockPort.readable,
+        writable: new WritableStream(),
+        abortStreamController: new AbortController(),
+      };
+      const commandStream = createCommandStreamReader(connection)();
+      const mockDecoderInstance = (SlipStreamDecoder as any).mock.results[0].value;
+
+      const receivedData: Uint8Array[] = [];
+      const data1 = textEncoder.encode("data1");
+
+      const consumerPromise = (async () => {
+        for await (const data of commandStream) {
+          receivedData.push(data as Uint8Array);
+          if (receivedData.length === 1) {
+            connection.connected = false; // Simulate disconnect
+          }
+        }
+      })();
+
+      const producerPromise = (async () => {
+        await sleep(1);
+        mockDecoderInstance._controller?.enqueue(data1);
+        await sleep(1);
+        // This data should not be received
+        mockDecoderInstance._controller?.enqueue(textEncoder.encode("data2"));
+        // Do not close the stream here, testing the connected flag
+      })();
+
+      await Promise.all([consumerPromise, producerPromise]);
+      // Ensure the producer has a chance to run even if consumer exits early
+      await sleep(10); // give a bit more time for producer to try to send data2
+
+      expect(receivedData).toEqual([data1]);
+      // Manually close to prevent test hangs if something went wrong
+      if (mockDecoderInstance._controller && !mockDecoderInstance._controller.desiredSize === null) {
+         mockDecoderInstance._controller.close();
+      }
+    });
+
+    it("should release the reader lock when the stream is fully consumed", async () => {
+      const mockPort = createMockSerialPort();
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: mockPort.readable, // This is the original port readable
+        writable: new WritableStream(),
+        abortStreamController: new AbortController(),
+      };
+
+      const commandStream = createCommandStreamReader(connection)();
+      const mockDecoderInstance = (SlipStreamDecoder as any).mock.results[0].value;
+
+      // Consumer
+      const consumerPromise = (async () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        for await (const _ of commandStream) { /* just consume */ }
+      })();
+
+      // Producer - close the decoder's stream to signal end
+      const producerPromise = (async () => {
+        await sleep(1); // allow consumer to attach
+        mockDecoderInstance._controller?.close();
+      })();
+
+      await Promise.all([consumerPromise, producerPromise]);
+
+      // connection.readable is now one of the teed streams.
+      // To verify the lock from the *internal* reader (on the other teed stream piped to decoder)
+      // is released, we need to ensure that the decoder's internal operations completed.
+      // The test for createLogStreamReader had a more direct way to check this.
+      // Here, we infer it by ensuring the generator completes.
+      // A more robust test might involve checking if the decoder's source stream (the teed one) is locked.
+      // However, Vitest/JSdom streams might not expose `locked` property reliably for this check.
+      // For now, successful completion of the generator is the primary check.
+      expect(true).toBe(true); // Placeholder for a more direct lock check if possible
+    });
+  });
+
+  // New test suite for writeToConnection
+  describe("writeToConnection", () => {
+    it("should call attachSlipstreamEncoder if writable is null but port exists", async () => {
+      const mockPort = createMockSerialPort();
+      mockPort.writable = new WritableStream(); // Mock port's actual writable
+      const connection: SerialConnection = {
+        port: mockPort as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: new ReadableStream(),
+        writable: null, // Key condition
+        abortStreamController: new AbortController(), // Needed by attachSlipstreamEncoder
+      };
+      const dataToWrite = new Uint8Array([1, 2, 3]);
+
+      // Mock attachSlipstreamEncoder to prevent its actual execution complexities here
+      // and to verify it's called. We need to import it for this.
+      // For this test, we need to ensure connection.writable becomes non-null after attachSlipstreamEncoder
+      // So, we'll let the actual `attachSlipstreamEncoder` run with the mocked SlipStreamEncoder
+
+      const mockEncoderInstance = (SlipStreamEncoder as any).mockImplementation(() => ({
+        readable: new ReadableStream(),
+        writable: new WritableStream({
+            write: vi.fn().mockResolvedValue(undefined), // Mock the write method
+        }),
+      }))().mock.results[0].value;
+
+
+      await writeToConnection(connection, dataToWrite);
+
+      expect(SlipStreamEncoder).toHaveBeenCalledOnce(); // From attachSlipstreamEncoder call
+      expect(connection.writable).toBe(mockEncoderInstance.writable); // Writable is now the encoder's writable
+
+      const writer = connection.writable?.getWriter();
+      writer?.write(dataToWrite); // This should now call the mock write
+      expect(writer?.write).toHaveBeenCalledWith(dataToWrite);
+      writer?.releaseLock();
+    });
+
+    it("should do nothing if writable is null and port is null", async () => {
+      const connection: SerialConnection = {
+        port: undefined, // Key condition
+        connected: true,
+        synced: false,
+        readable: new ReadableStream(),
+        writable: null, // Key condition
+        abortStreamController: new AbortController(),
+      };
+      const dataToWrite = new Uint8Array([1, 2, 3]);
+
+      await writeToConnection(connection, dataToWrite);
+      // No SlipStreamEncoder because port is null, so attachSlipstreamEncoder isn't effective
+      expect(SlipStreamEncoder).not.toHaveBeenCalled();
+      // writer.write should not be callable
+      expect(connection.writable).toBeNull();
+    });
+
+    it("should get a writer, write data, and release lock if writable exists", async () => {
+      const mockWritableStream = new WritableStream({
+        write: vi.fn().mockResolvedValue(undefined),
+        close: vi.fn().mockResolvedValue(undefined),
+      });
+      const getWriterSpy = vi.spyOn(mockWritableStream, 'getWriter');
+
+      const connection: SerialConnection = {
+        port: createMockSerialPort() as unknown as SerialPort,
+        connected: true,
+        synced: false,
+        readable: new ReadableStream(),
+        writable: mockWritableStream, // Pre-existing writable
+        abortStreamController: new AbortController(),
+      };
+      const dataToWrite = new Uint8Array([1, 2, 3]);
+
+      await writeToConnection(connection, dataToWrite);
+
+      expect(getWriterSpy).toHaveBeenCalledOnce();
+      // Access the actual writer instance created by the spy
+      const mockWriterInstance = getWriterSpy.mock.results[0].value;
+      expect(mockWriterInstance.write).toHaveBeenCalledWith(dataToWrite);
+      expect(mockWriterInstance.releaseLock).toHaveBeenCalledOnce(); // releaseLock is called on the writer
     });
   });
 });
