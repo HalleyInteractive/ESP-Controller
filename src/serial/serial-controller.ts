@@ -4,6 +4,11 @@ import {
   SlipStreamDecoder,
 } from "./stream-transformers";
 import { sleep } from "../utils/common";
+import {
+  EspCommand,
+  EspCommandPacket,
+  EspPacketDirection,
+} from "../esp/esp.command";
 
 /**
  * Default serial options when connecting to an ESP32.
@@ -232,4 +237,37 @@ export async function writeToConnection(
   const writer = connection.writable.getWriter();
   await writer.write(data);
   writer.releaseLock();
+}
+
+export async function syncEsp(connection: SerialConnection): Promise<boolean> {
+  await sendResetPulse(connection);
+  const maxAttempts = 10;
+  for (let i = 0; i < maxAttempts; i++) {
+    const syncCommand = new EspCommandPacket();
+    syncCommand.command = EspCommand.SYNC;
+    syncCommand.direction = EspPacketDirection.REQUEST;
+    syncCommand.data = new Uint8Array([
+      0x07, 0x07, 0x12, 0x20, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+      0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+      0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55,
+    ]);
+    syncCommand.checksum = 0;
+    await writeToConnection(connection, syncCommand.getPacketData());
+
+    const responseReader = createCommandStreamReader(connection)();
+
+    const response = await Promise.race([responseReader.next(), sleep(100)]);
+    const responsePacket = new EspCommandPacket();
+    if (response?.value) {
+      responsePacket.parseResponse(response.value);
+      if (responsePacket.command === EspCommand.SYNC) {
+        console.log("SYNCED", response);
+        return true;
+      }
+    }
+    console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
+    await sleep(500);
+    continue;
+  }
+  return false;
 }
