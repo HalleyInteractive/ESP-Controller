@@ -63,8 +63,6 @@ export class NVSPartition implements Partition {
     const newIndex = this.namespaces.length;
     this.namespaces.push(namespace);
 
-    // FIX: Namespace definitions are key-value pairs stored in namespace 0.
-    // The key is the namespace name (e.g., "wifi") and the value is its index (e.g., 1).
     try {
       this.write(namespace, newIndex, 0); // Write to namespace 0
     } catch (e) {
@@ -74,11 +72,6 @@ export class NVSPartition implements Partition {
       this.write(namespace, newIndex, 0);
     }
     return newIndex;
-  }
-
-  // REFACTOR: Decouple from UI. Accept a generic array of data.
-  public async load(): Promise<boolean> {
-    return true;
   }
 
   public get binary(): Uint8Array {

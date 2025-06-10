@@ -58,10 +58,6 @@ export class PartitionTable implements Partition {
     }
   }
 
-  public async load(): Promise<boolean> {
-    return true;
-  }
-
   get binary(): Uint8Array {
     return this.toBinary();
   }
