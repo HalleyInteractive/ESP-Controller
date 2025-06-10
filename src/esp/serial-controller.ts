@@ -60,10 +60,11 @@ export interface SerialConnection {
   commandResponseStream: ReadableStream<Uint8Array> | undefined;
 }
 
-export class SerialController {
+export class SerialController extends EventTarget {
   public connection: SerialConnection;
 
   constructor() {
+    super();
     this.connection = this.createSerialConnection();
   }
 
@@ -172,6 +173,11 @@ export class SerialController {
     const syncCommand = new EspCommandSync();
 
     for (let i = 0; i < maxAttempts; i++) {
+      this.dispatchEvent(
+        new CustomEvent("sync-progress", {
+          detail: { progress: (i / maxAttempts) * 100 },
+        }),
+      );
       console.log(`Sync attempt ${i + 1} of ${maxAttempts}`);
       await this.writeToConnection(
         syncCommand.getSlipStreamEncodedPacketData(),
@@ -208,6 +214,11 @@ export class SerialController {
             if (responsePacket.command === EspCommand.SYNC) {
               console.log("SYNCED successfully.", responsePacket);
               this.connection.synced = true;
+              this.dispatchEvent(
+                new CustomEvent("sync-progress", {
+                  detail: { progress: 100 },
+                }),
+              );
               return true;
             }
           }
@@ -312,6 +323,16 @@ export class SerialController {
       await this.writeToConnection(
         flashDataCmd.getSlipStreamEncodedPacketData(),
       );
+
+      this.dispatchEvent(
+        new CustomEvent("flash-progress", {
+          detail: {
+            progress: ((i + 1) / numPackets) * 100,
+            partition: partition,
+          },
+        }),
+      );
+
       console.log(
         `[${partition.filename}] Writing block ${i + 1}/${numPackets}`,
       );
@@ -344,9 +365,42 @@ export class SerialController {
     await this.readResponse(EspCommand.SPI_SET_PARAMS);
     console.log("SPI_SET_PARAMS successful.");
 
+    const totalSize = image.partitions.reduce(
+      (acc, part) => acc + part.binary.length,
+      0,
+    );
+    let flashedSize = 0;
+
     for (const partition of image.partitions) {
+      const originalDispatchEvent = this.dispatchEvent;
+      this.dispatchEvent = (event: Event) => {
+        if (event.type === "flash-progress" && "detail" in event) {
+          const partitionFlashed =
+            (partition.binary.length * (event as CustomEvent).detail.progress) /
+            100;
+          originalDispatchEvent.call(
+            this,
+            new CustomEvent("flash-image-progress", {
+              detail: {
+                progress: ((flashedSize + partitionFlashed) / totalSize) * 100,
+                partition: partition,
+              },
+            }),
+          );
+        }
+        return originalDispatchEvent.call(this, event);
+      };
+
       await this.flashPartition(partition);
+      flashedSize += partition.binary.length;
+      this.dispatchEvent = originalDispatchEvent;
     }
+
+    this.dispatchEvent(
+      new CustomEvent("flash-image-progress", {
+        detail: { progress: 100 },
+      }),
+    );
 
     console.log("Flashing complete. Resetting device...");
     await this.sendResetPulse();
