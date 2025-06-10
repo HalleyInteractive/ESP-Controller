@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import { Partition } from "../image/esp.partition";
 import { PartitionEntry } from "./partition-entry";
 import {
   AppPartitionSubType,
@@ -31,8 +32,10 @@ const MD5_PARTITION_BEGIN = new Uint8Array([
   ...Array(14).fill(0xff),
 ]);
 
-export class PartitionTable {
+export class PartitionTable implements Partition {
   private entries: PartitionEntry[] = [];
+  public readonly offset = PARTITION_TABLE_OFFSET;
+  public readonly filename = "partition-table.bin";
 
   constructor(definitions: PartitionDefinition[]) {
     this.processDefinitions(definitions);
@@ -53,6 +56,14 @@ export class PartitionTable {
       this.entries.push(new PartitionEntry(definition));
       lastEnd = definition.offset + definition.size;
     }
+  }
+
+  public async load(): Promise<boolean> {
+    return true;
+  }
+
+  get binary(): Uint8Array {
+    return this.toBinary();
   }
 
   public toBinary(enableMD5 = true): Uint8Array {

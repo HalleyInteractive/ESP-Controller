@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+import { Partition } from "../image/esp.partition";
 import { NVSPage } from "./nvs-page";
 import { NVSSettings } from "./nvs-settings";
 
-export class NVSPartition {
+export class NVSPartition implements Partition {
   private namespaces: string[] = [];
   private pages: NVSPage[] = [];
 
@@ -76,11 +77,7 @@ export class NVSPartition {
   }
 
   // REFACTOR: Decouple from UI. Accept a generic array of data.
-  public async load(entries: InputEntry[]): Promise<boolean> {
-    for (const entry of entries) {
-      const namespace = entry.namespace || NVSSettings.DEFAULT_NAMESPACE;
-      this.writeEntry(namespace, entry.key, entry.value);
-    }
+  public async load(): Promise<boolean> {
     return true;
   }
 

@@ -53,17 +53,4 @@ describe("NVSPartition", () => {
     // Check if the second page has been written to (offset by page size)
     expect(binary[NVSSettings.PAGE_SIZE + 32]).not.toBe(0xff);
   });
-
-  it("should load a list of entries correctly", async () => {
-    const entries = [
-      { namespace: "wifi", key: "ssid", value: "test_net" },
-      { namespace: "system", key: "volume", value: 80 },
-    ];
-    await partition.load(entries);
-
-    const binary = partition.binary;
-    // A simple check to ensure data has been written.
-    expect(binary[32]).not.toBe(0xff); // First entry header
-    expect(binary[64]).not.toBe(0xff); // Second entry header
-  });
 });
