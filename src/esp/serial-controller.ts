@@ -23,10 +23,10 @@ import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 import { EspCommandSync } from "./command.sync";
 import { EspCommandSpiAttach } from "./command.spi-attach";
 import { EspCommandSpiSetParams } from "./command.spi-set-params";
-import { ESPImage } from "../image/esp.image";
+import { ESPImage } from "../image/image";
 import { EspCommandFlashData } from "./command.flash-data";
 import { EspCommandFlashBegin } from "./command.flash-begin";
-import { Partition } from "../image/esp.partition";
+import { Partition } from "../partition/partition";
 
 /**
  * Default serial options when connecting to an ESP32.

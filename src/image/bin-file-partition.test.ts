@@ -15,7 +15,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { BinFilePartition } from "./esp.bin-file-partition";
+import { BinFilePartition } from "./bin-file-partition";
 
 // Mock global fetch
 const mockFetch = vi.fn();

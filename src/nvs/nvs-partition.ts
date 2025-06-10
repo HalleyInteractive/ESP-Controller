@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Partition } from "../image/esp.partition";
+import { Partition } from "../partition/partition";
 import { NVSPage } from "./nvs-page";
 import { NVSSettings } from "./nvs-settings";
 

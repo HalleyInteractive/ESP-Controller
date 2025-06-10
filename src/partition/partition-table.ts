@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Partition } from "../image/esp.partition";
+import { Partition } from "./partition";
 import { PartitionEntry } from "./partition-entry";
 import {
   AppPartitionSubType,

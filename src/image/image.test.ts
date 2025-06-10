@@ -15,11 +15,11 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { ESPImage } from "./esp.image";
-import { BinFilePartition } from "./esp.bin-file-partition";
+import { ESPImage } from "./image";
+import { BinFilePartition } from "./bin-file-partition";
 
 // Mock the BinFilePartition class
-vi.mock("./esp.bin-file-partition", () => {
+vi.mock("./bin-file-partition", () => {
   const BinFilePartition = vi.fn();
   BinFilePartition.prototype.load = vi.fn(() => Promise.resolve(true));
   return { BinFilePartition };

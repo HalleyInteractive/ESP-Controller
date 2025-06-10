@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { Partition } from "./esp.partition";
+import { Partition } from "../partition/partition";
 
 export class BinFilePartition implements Partition {
   binary: Uint8Array = new Uint8Array(0);
