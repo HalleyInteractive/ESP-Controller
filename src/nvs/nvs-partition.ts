@@ -68,6 +68,7 @@ export class NVSPartition {
       this.write(namespace, newIndex, 0); // Write to namespace 0
     } catch (e) {
       // This logic will be hit if writing the namespace entry itself fills the page.
+      console.log("Page is full, creating new", e);
       this.newPage();
       this.write(namespace, newIndex, 0);
     }
