@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -15,22 +15,26 @@
  */
 
 import { NvsEntry } from "./nvs-entry";
-import { crc32 } from "../utils/crc32";
-import { NvsEntryState, NVSSettings, NvsType } from "./nvs-settings";
-import { EntryStateBitmap } from "./state-bitmap";
+import { crc32 } from "../../utils/crc32";
+import { NVSSettings, NvsType, NvsEntryState } from "./nvs-settings";
+// REFACTOR: Import the new bitmap helper.
+import { EntryStateBitmap } from "../../utils/state-bitmap";
 
 export class NVSPage {
   private entryNumber = 0;
   private pageBuffer: Uint8Array;
   private pageHeader: Uint8Array;
-  private stateBitmap =
-    0b1111111111111111111111111111111111111111111111111111111111111111n;
+  // Initialize with all bits set to 1, representing the 'Empty' state (0b11) for all entries.
+  private stateBitmap = BigInt(
+    "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
+  );
   private entries: NvsEntry[] = [];
 
   private headerPageState: Uint8Array;
   private headerPageNumber: Uint8Array;
   private headerVersion: Uint8Array;
   private headerCRC32: Uint8Array;
+  private isStateLocked = false;
 
   constructor(
     public pageNumber: number,
@@ -47,52 +51,45 @@ export class NVSPage {
 
   private setPageHeader() {
     this.setPageState("ACTIVE");
-
-    this.headerPageNumber.fill(0).set([this.pageNumber]);
+    this.headerPageNumber.set([this.pageNumber]);
     this.headerVersion.set([this.version]);
-
-    const crcData: Uint8Array = this.pageHeader.slice(4, 28);
-    this.headerCRC32.set(crc32(crcData));
-    this.pageBuffer.set(this.pageHeader, 0);
+    this.updateHeaderCrc();
   }
 
-  private getNVSEncoding(value: number | string): number {
-    if (typeof value === "number") {
-      const abs = Math.abs(value);
-      const neg = value < 0;
-      let enc = 0x00;
-      if (abs < 256) {
-        enc = NvsType.U8;
-      } else if (abs < 65536) {
-        enc = NvsType.U16;
-      } else if (abs < 4294967296) {
-        enc = NvsType.U32;
-      } else {
-        enc = NvsType.U64;
-      }
-      if (neg) {
-        enc += 0x10;
-      }
-      return enc;
-    } else if (typeof value === "string") {
+  private updateHeaderCrc() {
+    // CRC32 is calculated over bytes 4 to 28 of the header.
+    const crcData: Uint8Array = this.pageHeader.slice(4, 28);
+    this.headerCRC32.set(crc32(crcData));
+  }
+
+  private getNVSEncoding(value: number | string): NvsType {
+    if (typeof value === "string") {
       return NvsType.STR;
+    }
+    const isNegative = value < 0;
+    const absValue = Math.abs(value);
+    if (isNegative) {
+      if (absValue <= 0x80) return NvsType.I8;
+      if (absValue <= 0x8000) return NvsType.I16;
+      if (absValue <= 0x80000000) return NvsType.I32;
+      return NvsType.I64;
     } else {
-      return NvsType.ANY;
+      if (absValue <= 0xff) return NvsType.U8;
+      if (absValue <= 0xffff) return NvsType.U16;
+      if (absValue <= 0xffffffff) return NvsType.U32;
+      return NvsType.U64;
     }
   }
 
-  /**
-   * Add an entry to the page.
-   * @param key Key for this entry, max 15 bytes.
-   * @param data Entry data.
-   * @param namespaceIndex Index of namespace for this entry.
-   * @returns Entry that's written to the page.
-   */
   public writeEntry(
     key: string,
     data: string | number,
     namespaceIndex: number,
   ): NvsEntry {
+    if (this.isStateLocked) {
+      throw new Error("Page is full and locked. Cannot write new entries.");
+    }
+
     const entryKv: NvsKeyValue = {
       namespace: namespaceIndex,
       key,
@@ -100,47 +97,52 @@ export class NVSPage {
       type: this.getNVSEncoding(data),
     };
     const entry: NvsEntry = new NvsEntry(entryKv);
+
     if (entry.entriesNeeded + this.entryNumber > NVSSettings.PAGE_MAX_ENTRIES) {
-      throw Error("Entry doesn't fit on the page");
-    } else {
-      this.entries.push(entry);
-      for (let i = 0; i < entry.entriesNeeded; i++) {
-        const entryIndex = this.entryNumber + i;
-        this.stateBitmap = EntryStateBitmap.setState(
-          this.stateBitmap,
-          entryIndex,
-          NvsEntryState.Written,
-        );
-      }
-      this.entryNumber += entry.entriesNeeded;
+      this.setPageState("FULL");
+      throw new Error("Entry doesn't fit on the page");
     }
+
+    this.entries.push(entry);
+
+    // REFACTOR: Use the bitmap helper for a clean and reliable state update.
+    for (let i = 0; i < entry.entriesNeeded; i++) {
+      const entryIndex = this.entryNumber + i;
+      this.stateBitmap = EntryStateBitmap.setState(
+        this.stateBitmap,
+        entryIndex,
+        NvsEntryState.Written,
+      );
+    }
+
+    this.entryNumber += entry.entriesNeeded;
     return entry;
   }
 
-  /**
-   * Sets the page state bytes in the header of the page.
-   * @param state New page state.
-   */
   public setPageState(state: NvsPageState) {
     if (state === "FULL") {
-      this.headerPageState.set([NVSSettings.PAGE_FULL]);
+      this.headerPageState
+        .fill(0)
+        .set(new Uint8Array(new Uint32Array([NVSSettings.PAGE_FULL]).buffer));
+      this.isStateLocked = true;
     } else if (state === "ACTIVE") {
-      this.headerPageState.set([NVSSettings.PAGE_ACTIVE]);
+      this.headerPageState
+        .fill(0)
+        .set(new Uint8Array(new Uint32Array([NVSSettings.PAGE_ACTIVE]).buffer));
     } else {
       throw Error("Invalid page state requested");
     }
-    const crcData: Uint8Array = this.pageHeader.slice(4, 28);
-    this.headerCRC32.set(crc32(crcData));
+    // FIX: The header CRC must be recalculated whenever the state changes.
+    this.updateHeaderCrc();
   }
 
-  /**
-   * Get the page buffer data.
-   * @returns Page buffer of size 4096
-   */
   public getData(): Uint8Array {
     const sbm = new Uint8Array(NVSSettings.BLOCK_SIZE).fill(0xff);
     const sbmView = new DataView(sbm.buffer, 0);
-    sbmView.setBigInt64(0, this.stateBitmap, true);
+    sbmView.setBigUint64(0, this.stateBitmap, true); // Use little-endian
+
+    // Finalize page buffer before returning
+    this.pageBuffer.set(this.pageHeader, 0);
     this.pageBuffer.set(sbm, NVSSettings.BLOCK_SIZE);
 
     let offset = NVSSettings.BLOCK_SIZE * 2;

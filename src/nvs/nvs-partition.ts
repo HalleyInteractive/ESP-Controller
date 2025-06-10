@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,8 +17,7 @@
 import { NVSPage } from "./nvs-page";
 import { NVSSettings } from "./nvs-settings";
 
-export class NVSPartition implements Partition {
-  static entries: HTMLInputElement[] = [];
+export class NVSPartition {
   private namespaces: string[] = [];
   private pages: NVSPage[] = [];
 
@@ -27,97 +26,97 @@ export class NVSPartition implements Partition {
     public readonly filename: string,
     public size: number = 0x3000,
   ) {
+    // Namespace at index 0 is reserved. We add a placeholder.
+    this.namespaces.push("RESERVED_NS_0");
     this.newPage();
   }
 
   private newPage(): NVSPage {
-    this.pages.map((page: NVSPage) => {
-      page.setPageState("FULL");
-    });
+    const lastPage = this.getLastPage();
+    if (lastPage) {
+      lastPage.setPageState("FULL");
+    }
     const index = this.pages.length;
     const nvsPage = new NVSPage(index, NVSSettings.NVS_VERSION);
     this.pages.push(nvsPage);
     return nvsPage;
   }
 
-  private getLastPage(): NVSPage {
-    const lastPageIndex = this.pages.length - 1;
-    return this.pages[lastPageIndex];
+  private getLastPage(): NVSPage | null {
+    if (this.pages.length === 0) {
+      return null;
+    }
+    return this.pages[this.pages.length - 1];
   }
 
   private getNameSpaceIndex(namespace: string): number {
-    for (let i = 0; i < this.namespaces.length; i++) {
-      if (namespace === this.namespaces[i]) {
-        return i + 1;
-      }
+    const existingIndex = this.namespaces.indexOf(namespace);
+    if (existingIndex !== -1) {
+      return existingIndex;
     }
-    // Add as new namespace if above didn't return.
+
+    // Add as new namespace.
+    if (this.namespaces.length >= 254) {
+      throw new Error("Maximum number of namespaces (254) reached.");
+    }
+    const newIndex = this.namespaces.length;
     this.namespaces.push(namespace);
-    const index = this.namespaces.length;
-    const index = this.namespaces.length;
+
+    // FIX: Namespace definitions are key-value pairs stored in namespace 0.
+    // The key is the namespace name (e.g., "wifi") and the value is its index (e.g., 1).
     try {
-      const page = this.getLastPage();
-      // Namespace definitions are always stored in namespace 0.
-      // The key is the namespace name, and the value is its newly assigned index.
-      page.writeEntry(namespace, index, 0); // Corrected: Always use namespace 0
-    } catch (error) {
-      // TODO: Add proper error handling, throw page full error.
-      console.log(error);
-      const page = this.newPage();
-      page.writeEntry(namespace, index, index - 1);
+      this.write(namespace, newIndex, 0); // Write to namespace 0
+    } catch (e) {
+      // This logic will be hit if writing the namespace entry itself fills the page.
+      this.newPage();
+      this.write(namespace, newIndex, 0);
     }
-    return index;
+    return newIndex;
   }
 
-  /**
-   * Dummy load method, implemented from other binaries that are downloaded.
-   * @returns true
-   */
-  public async load(): Promise<boolean> {
-    console.log("NVS Load");
-    console.log(NVSPartition.entries);
-    for (const input of NVSPartition.entries) {
-      const namespace =
-        input.getAttribute("namespace") || NVSSettings.DEFAULT_NAMESPACE;
-      const key = input.id;
-      const val = input.value;
-      this.writeEntry(namespace, key, val);
+  // REFACTOR: Decouple from UI. Accept a generic array of data.
+  public async load(entries: InputEntry[]): Promise<boolean> {
+    for (const entry of entries) {
+      const namespace = entry.namespace || NVSSettings.DEFAULT_NAMESPACE;
+      this.writeEntry(namespace, entry.key, entry.value);
     }
     return true;
   }
 
-  /**
-   * Retruns all page buffers.
-   */
   public get binary(): Uint8Array {
     const buffer = new Uint8Array(this.size).fill(0xff);
-    let i = 0;
+    let offset = 0;
     for (const page of this.pages) {
       const pageBuffer = page.getData();
-      buffer.set(pageBuffer, i);
-      i += pageBuffer.length;
+      buffer.set(pageBuffer, offset);
+      offset += pageBuffer.length;
     }
     return buffer;
   }
 
-  /**
-   * Write a key value pair to the NVS partition.
-   * @param namespace Namespace to write entry to.
-   * @param key Key, max 15 bytes. Keys are required to be unique.
-   * @param data Value.
-   */
   public writeEntry(namespace: string, key: string, data: string | number) {
-    // Check if it fit within Partition size.
     const namespaceIndex = this.getNameSpaceIndex(namespace);
+    this.write(key, data, namespaceIndex);
+  }
+
+  // Private write helper to avoid recursive loop in namespace creation
+  private write(key: string, data: string | number, namespaceIndex: number) {
     try {
       const page = this.getLastPage();
+      if (!page) throw new Error("No active page available.");
       page.writeEntry(key, data, namespaceIndex);
     } catch (error) {
-      console.log(error);
-      console.log("Error page full?");
-      // TODO: Add better error handling.
-      const page = this.newPage();
-      page.writeEntry(key, data, namespaceIndex);
+      if (
+        error instanceof Error &&
+        error.message.startsWith("Entry doesn't fit")
+      ) {
+        // If the current page is full, create a new one and retry.
+        const page = this.newPage();
+        page.writeEntry(key, data, namespaceIndex);
+      } else {
+        // Re-throw other errors
+        throw error;
+      }
     }
   }
 }

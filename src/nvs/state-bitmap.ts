@@ -1,4 +1,20 @@
-// utils/state-bitmap.ts
+/**
+ * Copyright 2022 Google LLC
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// NEW: This enum provides clear, readable names for entry states.
 import { NvsEntryState } from "../nvs-settings";
 
 /**
@@ -22,39 +38,16 @@ export const EntryStateBitmap = {
       throw new Error("Entry index is out of bounds.");
     }
 
-    // Calculate the bit position for the 2-bit state.
-    // Each entry takes 2 bits, so we multiply the index by 2.
     const bitPosition = BigInt(entryIndex * 2);
 
     // 1. Create a mask to clear the 2 bits for the target entry.
-    //    e.g., for index 0, mask is ...11111100
     const clearMask = ~(0b11n << bitPosition);
-
-    // 2. Clear the relevant bits in the bitmap.
     const clearedBitmap = currentBitmap & clearMask;
 
-    // 3. Create the new value shifted to the correct position.
-    //    e.g., for Written (0b10), value is 0b10 << bitPosition
+    // 2. Create the new value shifted to the correct position.
     const newValue = BigInt(newState) << bitPosition;
 
-    // 4. Combine the cleared bitmap with the new state value.
+    // 3. Combine the cleared bitmap with the new state value.
     return clearedBitmap | newValue;
-  },
-
-  /**
-   * Gets the state of a given entry from the bitmap.
-   * @param currentBitmap The current state bitmap as a BigInt.
-   * @param entryIndex The index of the entry to read (0-125).
-   * @returns The state of the entry.
-   */
-  getState(currentBitmap: bigint, entryIndex: number): NvsEntryState {
-    if (entryIndex < 0 || entryIndex >= 126) {
-      throw new Error("Entry index is out of bounds.");
-    }
-    const bitPosition = BigInt(entryIndex * 2);
-    // Shift the relevant bits to the rightmost position.
-    const shifted = currentBitmap >> bitPosition;
-    // Mask with 0b11 to get only the two bits.
-    return Number(shifted & 0b11n) as NvsEntryState;
   },
 };

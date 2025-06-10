@@ -5,32 +5,19 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
+ * Unless required by applicable law of an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
 
 import { crc32 } from "../../utils/crc32";
+// REFACTOR: Import enums from the central settings file.
+import { NVSSettings, NvsType } from "./nvs-settings";
 
-const NVS_BLOCK_SIZE = 32;
-
-enum NvsType {
-  U8 = 0x01,
-  I8 = 0x11,
-  U16 = 0x02,
-  I16 = 0x12,
-  U32 = 0x04,
-  I32 = 0x14,
-  U64 = 0x08,
-  I64 = 0x18,
-  STR = 0x21,
-  BLOB = 0x42,
-  ANY = 0xff,
-}
+const NVS_BLOCK_SIZE = NVSSettings.BLOCK_SIZE;
 
 export class NvsEntry implements NvsKeyValue {
   namespace: number;
@@ -54,22 +41,21 @@ export class NvsEntry implements NvsKeyValue {
   entriesNeeded = 0;
 
   constructor(entry: NvsKeyValue) {
-    console.log("NEW ENTRY", entry);
-
     this.namespace = entry.namespace;
     this.type = entry.type;
-
     this.data = entry.data;
 
+    // FIX: Validate key length BEFORE adding null terminator. Max key length is 15 chars.
     if (entry.key.length > 15) {
-      // Check original key length
       throw Error(
         `NVS max key length is 15, received '${entry.key}' of length ${entry.key.length}`,
       );
     }
+
+    // FIX: Avoid side-effects. Don't modify the original `entry` object.
     this.key = entry.key + "\0";
 
-    this.headerBuffer = new Uint8Array(32);
+    this.headerBuffer = new Uint8Array(NVS_BLOCK_SIZE);
     this.headerNamespace = new Uint8Array(this.headerBuffer.buffer, 0, 1);
     this.headerType = new Uint8Array(this.headerBuffer.buffer, 1, 1);
     this.headerSpan = new Uint8Array(this.headerBuffer.buffer, 2, 1);
@@ -100,8 +86,11 @@ export class NvsEntry implements NvsKeyValue {
   }
 
   private setEntryData() {
-    if (typeof this.data === "string") {
+    if (this.type === NvsType.STR) {
       this.setStringEntry();
+    } else if (this.type === NvsType.BLOB) {
+      // FEATURE: Blob support would be implemented here.
+      throw new Error("BLOB type not yet implemented.");
     } else if (typeof this.data === "number") {
       this.setPrimitiveEntry();
     }
@@ -109,9 +98,15 @@ export class NvsEntry implements NvsKeyValue {
 
   private setStringEntry() {
     if (typeof this.data === "string") {
-      this.data += "\0"; // Adding null terminator.
+      const valueWithTerminator = this.data + "\0";
       const encoder = new TextEncoder();
-      const data = encoder.encode(this.data);
+      const data = encoder.encode(valueWithTerminator);
+
+      if (data.length > 4000) {
+        throw new Error(
+          `String values are limited to 4000 bytes, including null terminator.`,
+        );
+      }
 
       this.entriesNeeded = Math.ceil(data.length / NVS_BLOCK_SIZE);
       this.dataBuffer = new Uint8Array(
@@ -119,11 +114,12 @@ export class NvsEntry implements NvsKeyValue {
       ).fill(0xff);
       this.dataBuffer.set(data);
 
-      this.entriesNeeded += 1; // +1 for header
+      this.entriesNeeded += 1; // +1 for the header entry
 
-      const dataSizeBuffer: ArrayBuffer = new ArrayBuffer(2);
-      const dataSizeView: DataView = new DataView(dataSizeBuffer, 0, 2);
-      dataSizeView.setUint8(0, data.length);
+      const dataSizeBuffer = new ArrayBuffer(2);
+      const dataSizeView = new DataView(dataSizeBuffer, 0, 2);
+      // The stored size includes the null terminator.
+      dataSizeView.setUint16(0, data.length, true); // Use little-endian
 
       this.headerDataSize.set(new Uint8Array(dataSizeBuffer), 0);
       this.headerDataCRC32.set(crc32(data));
@@ -133,43 +129,45 @@ export class NvsEntry implements NvsKeyValue {
   private setPrimitiveEntry() {
     if (typeof this.data === "number") {
       const dataBuffer: ArrayBuffer = new ArrayBuffer(8);
-      const dataBufferView: DataView = new DataView(dataBuffer, 0, 8);
-      const dataBufferArray: Uint8Array = new Uint8Array(dataBuffer).fill(0xff);
+      const dataView: DataView = new DataView(dataBuffer, 0, 8);
+
+      // NVS uses little-endian format. Set the `littleEndian` parameter to true.
       switch (this.type) {
         case NvsType.U8:
-          dataBufferView.setUint8(0, this.data);
+          dataView.setUint8(0, this.data);
           break;
         case NvsType.U16:
-          dataBufferView.setUint16(0, this.data);
+          dataView.setUint16(0, this.data, true);
           break;
         case NvsType.U32:
-          dataBufferView.setUint32(0, this.data);
+          dataView.setUint32(0, this.data, true);
           break;
         case NvsType.U64:
-          dataBufferView.setBigUint64(0, BigInt(this.data));
+          dataView.setBigUint64(0, BigInt(this.data), true);
           break;
         case NvsType.I8:
-          dataBufferView.setInt8(0, this.data);
+          dataView.setInt8(0, this.data);
           break;
         case NvsType.I16:
-          dataBufferView.setInt16(0, this.data);
+          dataView.setInt16(0, this.data, true);
           break;
         case NvsType.I32:
-          dataBufferView.setInt32(0, this.data);
+          dataView.setInt32(0, this.data, true);
           break;
         case NvsType.I64:
-          dataBufferView.setBigInt64(0, BigInt(this.data));
+          dataView.setBigInt64(0, BigInt(this.data), true);
           break;
         default:
-          dataBufferView.setUint32(0, this.data);
-          break;
+          throw new Error(`Unsupported primitive type: ${this.type}`);
       }
-      this.headerData.set(dataBufferArray, 0);
+      this.headerData.set(new Uint8Array(dataBuffer), 0);
     }
     this.entriesNeeded = 1;
   }
 
   private setEntryHeaderCRC() {
+    // CRC is calculated over all fields except the CRC itself.
+    // This includes bytes 0-3 (NS, Type, Span, ChunkIdx) and 8-31 (Key, Data).
     const crcData: Uint8Array = new Uint8Array(28);
     crcData.set(this.headerBuffer.slice(0, 4), 0);
     crcData.set(this.headerBuffer.slice(8, 32), 4);
