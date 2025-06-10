@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { crc32 } from "../../utils/crc32";
+import { crc32 } from "../utils/crc32";
 // REFACTOR: Import enums from the central settings file.
 import { NVSSettings, NvsType } from "./nvs-settings";
 

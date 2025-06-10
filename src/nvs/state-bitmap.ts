@@ -15,7 +15,7 @@
  */
 
 // NEW: This enum provides clear, readable names for entry states.
-import { NvsEntryState } from "../nvs-settings";
+import { NvsEntryState } from "./nvs-settings";
 
 /**
  * A helper utility to manage the 126-entry, 252-bit state bitmap.

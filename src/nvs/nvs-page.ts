@@ -3,7 +3,8 @@
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * You may
+ * obtain a copy of the License at
  *
  * http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -15,10 +16,9 @@
  */
 
 import { NvsEntry } from "./nvs-entry";
-import { crc32 } from "../../utils/crc32";
+import { crc32 } from "../utils/crc32";
 import { NVSSettings, NvsType, NvsEntryState } from "./nvs-settings";
-// REFACTOR: Import the new bitmap helper.
-import { EntryStateBitmap } from "../../utils/state-bitmap";
+import { EntryStateBitmap } from "./state-bitmap";
 
 export class NVSPage {
   private entryNumber = 0;
@@ -29,6 +29,8 @@ export class NVSPage {
     "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
   );
   private entries: NvsEntry[] = [];
+  // Optimization: A map of a 24-bit hash to an entry's index for faster lookups.
+  private itemHashMap = new Map<number, number>();
 
   private headerPageState: Uint8Array;
   private headerPageNumber: Uint8Array;
@@ -60,6 +62,24 @@ export class NVSPage {
     // CRC32 is calculated over bytes 4 to 28 of the header.
     const crcData: Uint8Array = this.pageHeader.slice(4, 28);
     this.headerCRC32.set(crc32(crcData));
+  }
+
+  /**
+   * Calculates a 24-bit hash for an entry based on its namespace, key, and chunk index.
+   * @param namespaceIndex - The index of the namespace.
+   * @param key - The key string.
+   * @param chunkIndex - The chunk index of the entry.
+   * @returns A 24-bit hash number.
+   */
+  private _calculateItemHash(
+    namespaceIndex: number,
+    key: string,
+    chunkIndex: number,
+  ): number {
+    const hashData = `${namespaceIndex}:${key}:${chunkIndex}`;
+    const fullCrc = crc32(new TextEncoder().encode(hashData));
+    // Truncate the 32-bit CRC to 24 bits as per documentation.
+    return new DataView(fullCrc.buffer).getUint32(0, true) & 0x00ffffff;
   }
 
   private getNVSEncoding(value: number | string): NvsType {
@@ -103,9 +123,12 @@ export class NVSPage {
       throw new Error("Entry doesn't fit on the page");
     }
 
+    // Add to the hash list for optimized searching.
+    const hash = this._calculateItemHash(namespaceIndex, key, entry.chunkIndex);
+    this.itemHashMap.set(hash, this.entryNumber);
+
     this.entries.push(entry);
 
-    // REFACTOR: Use the bitmap helper for a clean and reliable state update.
     for (let i = 0; i < entry.entriesNeeded; i++) {
       const entryIndex = this.entryNumber + i;
       this.stateBitmap = EntryStateBitmap.setState(
@@ -117,6 +140,44 @@ export class NVSPage {
 
     this.entryNumber += entry.entriesNeeded;
     return entry;
+  }
+
+  /**
+   * Finds an entry on the page using the optimized hash list.
+   * Falls back to a linear scan if the hash is not found or a collision occurs.
+   * @param key - The key of the entry to find.
+   * @param namespaceIndex - The namespace of the entry.
+   * @param chunkIndex - The chunk index of the entry (defaults to 0xff for non-blob types).
+   * @returns The found NvsEntry, or undefined if not found.
+   */
+  public findEntry(
+    key: string,
+    namespaceIndex: number,
+    chunkIndex = 0xff,
+  ): NvsEntry | undefined {
+    const hash = this._calculateItemHash(namespaceIndex, key, chunkIndex);
+    const potentialIndex = this.itemHashMap.get(hash);
+
+    if (potentialIndex !== undefined) {
+      const entry = this.entries[potentialIndex];
+      // Verify if this is the correct entry to handle hash collisions.
+      if (
+        entry &&
+        entry.key === key &&
+        entry.namespaceIndex === namespaceIndex &&
+        entry.chunkIndex === chunkIndex
+      ) {
+        return entry;
+      }
+    }
+
+    // Fallback: linear search if hash not found or in case of a collision.
+    return this.entries.find(
+      (entry) =>
+        entry.key === key &&
+        entry.namespaceIndex === namespaceIndex &&
+        entry.chunkIndex === chunkIndex,
+    );
   }
 
   public setPageState(state: NvsPageState) {
@@ -132,7 +193,6 @@ export class NVSPage {
     } else {
       throw Error("Invalid page state requested");
     }
-    // FIX: The header CRC must be recalculated whenever the state changes.
     this.updateHeaderCrc();
   }
 
