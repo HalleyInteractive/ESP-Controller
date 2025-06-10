@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -39,19 +39,14 @@ describe("NVSPage", () => {
 
     // Mock NvsEntry constructor and properties for consistent testing
     vi.mocked(NvsEntry).mockImplementation(
-      (entryKv: {
-        namespace: number;
-        key: string;
-        data: string | number;
-        type: NvsType;
-      }) =>
+      (entryKv: NvsKeyValue) =>
         ({
           entriesNeeded: 1, // Default to 1, can be overridden in specific tests
           chunkIndex: 0xff,
           headerBuffer: new Uint8Array(32).fill(0xaa),
           dataBuffer: new Uint8Array(32).fill(0xbb),
           key: entryKv.key,
-          namespaceIndex: entryKv.namespace,
+          namespaceIndex: entryKv.namespaceIndex,
           data: entryKv.data,
         }) as unknown as NvsEntry,
     );
@@ -96,7 +91,7 @@ describe("NVSPage", () => {
       expect(entry.key).toBe(key);
       expect(entry.data).toBe(data);
       expect(NvsEntry).toHaveBeenCalledWith({
-        namespace: namespaceIndex,
+        namespaceIndex: namespaceIndex,
         key,
         data,
         type: NvsType.U8,

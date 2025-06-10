@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,14 +22,14 @@ import { crc32 } from "../utils/crc32";
 describe("NvsEntry", () => {
   it("should correctly initialize a primitive U8 entry", () => {
     const entryData = {
-      namespace: 1,
+      namespaceIndex: 1,
       type: NvsType.U8,
       key: "test_key",
       data: 128,
     };
     const entry = new NvsEntry(entryData);
 
-    expect(entry.namespace).toBe(entryData.namespace);
+    expect(entry.namespaceIndex).toBe(entryData.namespaceIndex);
     expect(entry.type).toBe(entryData.type);
     expect(entry.key).toBe(entryData.key + "\0");
     expect(entry.data).toBe(entryData.data);
@@ -40,14 +40,14 @@ describe("NvsEntry", () => {
 
   it("should correctly initialize a string entry", () => {
     const entryData = {
-      namespace: 2,
+      namespaceIndex: 2,
       type: NvsType.STR,
       key: "string_key",
       data: "hello nvs",
     };
     const entry = new NvsEntry(entryData);
 
-    expect(entry.namespace).toBe(entryData.namespace);
+    expect(entry.namespaceIndex).toBe(entryData.namespaceIndex);
     expect(entry.type).toBe(entryData.type);
     expect(entry.key).toBe(entryData.key + "\0");
     expect(entry.data).toBe(entryData.data);
@@ -57,7 +57,7 @@ describe("NvsEntry", () => {
 
   it("should throw an error for keys longer than 15 characters", () => {
     const entryData = {
-      namespace: 1,
+      namespaceIndex: 1,
       type: NvsType.U8,
       key: "this_is_a_very_long_key",
       data: 10,
@@ -70,7 +70,7 @@ describe("NvsEntry", () => {
 
   it("should correctly set the header for a primitive entry", () => {
     const entryData = {
-      namespace: 1,
+      namespaceIndex: 1,
       type: NvsType.U32,
       key: "my_u32",
       data: 0xabcdef,
@@ -78,7 +78,7 @@ describe("NvsEntry", () => {
     const entry = new NvsEntry(entryData);
     const headerView = new DataView(entry.headerBuffer.buffer);
 
-    expect(headerView.getUint8(0)).toBe(entryData.namespace);
+    expect(headerView.getUint8(0)).toBe(entryData.namespaceIndex);
     expect(headerView.getUint8(1)).toBe(entryData.type);
     expect(headerView.getUint8(2)).toBe(1); // span
     expect(headerView.getUint8(3)).toBe(0xff); // chunkIndex
@@ -86,7 +86,7 @@ describe("NvsEntry", () => {
 
   it("should calculate the header CRC32 correctly", () => {
     const entryData = {
-      namespace: 1,
+      namespaceIndex: 1,
       type: NvsType.U8,
       key: "test_key",
       data: 42,

@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,10 +21,11 @@ import { NVSSettings, NvsType } from "./nvs-settings";
 const NVS_BLOCK_SIZE = NVSSettings.BLOCK_SIZE;
 
 export class NvsEntry implements NvsKeyValue {
-  namespace: number;
+  namespaceIndex: number;
   type: NvsType;
   key: string;
   data: string | number;
+  chunkIndex: number;
 
   headerNamespace: Uint8Array;
   headerType: Uint8Array;
@@ -42,9 +43,12 @@ export class NvsEntry implements NvsKeyValue {
   entriesNeeded = 0;
 
   constructor(entry: NvsKeyValue) {
-    this.namespace = entry.namespace;
+    this.namespaceIndex = entry.namespaceIndex;
     this.type = entry.type;
     this.data = entry.data;
+
+    // For non-blob types, chunkIndex is 0xff.
+    this.chunkIndex = 0xff;
 
     // FIX: Validate key length BEFORE adding null terminator. Max key length is 15 chars.
     if (entry.key.length > 15) {
@@ -60,9 +64,7 @@ export class NvsEntry implements NvsKeyValue {
     this.headerNamespace = new Uint8Array(this.headerBuffer.buffer, 0, 1);
     this.headerType = new Uint8Array(this.headerBuffer.buffer, 1, 1);
     this.headerSpan = new Uint8Array(this.headerBuffer.buffer, 2, 1);
-    this.headerChunkIndex = new Uint8Array(this.headerBuffer.buffer, 3, 1).fill(
-      0xff,
-    );
+    this.headerChunkIndex = new Uint8Array(this.headerBuffer.buffer, 3, 1);
     this.headerCRC32 = new Uint8Array(this.headerBuffer.buffer, 4, 4);
     this.headerKey = new Uint8Array(this.headerBuffer.buffer, 8, 16);
     this.headerData = new Uint8Array(this.headerBuffer.buffer, 24, 8).fill(
@@ -80,9 +82,10 @@ export class NvsEntry implements NvsKeyValue {
 
   private setEntryHeader() {
     const encoder = new TextEncoder();
-    this.headerNamespace.set([this.namespace]);
+    this.headerNamespace.set([this.namespaceIndex]);
     this.headerType.set([this.type]);
     this.headerSpan.set([this.entriesNeeded]);
+    this.headerChunkIndex.set([this.chunkIndex]);
     this.headerKey.set(encoder.encode(this.key));
   }
 
@@ -105,7 +108,7 @@ export class NvsEntry implements NvsKeyValue {
 
       if (data.length > 4000) {
         throw new Error(
-          `String values are limited to 4000 bytes, including null terminator.`,
+          `String values are limited to 4000 bytes, including null terminator. `,
         );
       }
 
