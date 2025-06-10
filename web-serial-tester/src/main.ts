@@ -1,12 +1,5 @@
 import { ESPImage } from "../../src/image/esp.image";
-import {
-  createSerialConnection,
-  createLogStreamReader,
-  openPort,
-  requestPort,
-  syncEsp,
-  flashImage,
-} from "../../src/serial/serial-controller";
+import { SerialController } from "../../src/serial/serial-controller";
 import { NVSPartition } from "../../src/nvs/nvs-partition";
 import { PartitionTable } from "../../src/partition/partition-table";
 
@@ -17,7 +10,7 @@ const connectButton = document.getElementById(
 const statusDiv = document.getElementById("status") as HTMLDivElement;
 
 // --- Main application logic ---
-const connection = createSerialConnection();
+const serialController = new SerialController();
 
 export async function init() {
   if (!connectButton || !statusDiv) {
@@ -30,14 +23,14 @@ export async function init() {
   statusDiv.textContent = "Status: Awaiting port selection...";
 
   try {
-    await requestPort(connection);
+    await serialController.requestPort();
     statusDiv.textContent = `Status: Port selected. Opening connection...`;
 
-    await openPort(connection);
+    await serialController.openPort();
     statusDiv.textContent = `Status: Connected!`;
     connectButton.disabled = true; // Disable button after successful connection
 
-    console.log("Connection successful:", connection);
+    console.log("Connection successful:", serialController.connection);
   } catch (error: unknown) {
     // Handle errors, like the user clicking "Cancel"
     if (error instanceof Error) {
@@ -48,7 +41,7 @@ export async function init() {
 }
 
 async function setupLogStream() {
-  const logStreamReader = createLogStreamReader(connection);
+  const logStreamReader = serialController.createLogStreamReader();
   logToConsole(logStreamReader);
 }
 
@@ -66,7 +59,7 @@ async function flashTestImage() {
   nvsPartition.writeEntry("test", "MyPassword", "wifi");
   image.addPartition(nvsPartition);
 
-  await flashImage(connection, image);
+  await serialController.flashImage(image);
 }
 
 async function logToConsole(
@@ -86,8 +79,8 @@ connectButton.addEventListener("click", init);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (globalThis as any).SerialAPI = {
   init,
-  connection,
-  syncEsp,
+  connection: serialController.connection,
+  syncEsp: () => serialController.sync(),
   flashTestImage,
   setupLogStream,
 };
