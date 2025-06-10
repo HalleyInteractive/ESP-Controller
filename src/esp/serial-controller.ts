@@ -128,7 +128,7 @@ export class SerialController {
   public async openPort(
     options: SerialOptions = DEFAULT_ESP32_SERIAL_OPTIONS,
   ): Promise<void> {
-    if (!this.connection.port) return;
+    if (!this.connection.port?.readable) return;
     await this.connection.port.open(options);
 
     const [commandTee, logTee] = this.connection.port.readable.tee();
@@ -333,9 +333,6 @@ export class SerialController {
         );
       }
     }
-
-    console.log("Loading binary files...");
-    await image.load();
 
     const attachCmd = new EspCommandSpiAttach();
     await this.writeToConnection(attachCmd.getSlipStreamEncodedPacketData());

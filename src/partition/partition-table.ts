@@ -70,10 +70,11 @@ export class PartitionTable implements Partition {
 
     if (enableMD5) {
       // Use SparkMD5.ArrayBuffer.hash for binary data
-      const checksum = SparkMD5.ArrayBuffer.hash(binary, true);
+      const checksum = SparkMD5.ArrayBuffer.hash(binary.buffer, true);
+      const checksumBytes = Uint8Array.from(checksum, (c) => c.charCodeAt(0));
       const md5Entry = new Uint8Array([
         ...MD5_PARTITION_BEGIN,
-        ...new Uint8Array(checksum),
+        ...new Uint8Array(checksumBytes),
       ]);
       binary = new Uint8Array([...binary, ...md5Entry]);
     }

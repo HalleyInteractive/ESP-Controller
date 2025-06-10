@@ -35,10 +35,4 @@ export class ESPImage {
   addPartition(partition: Partition) {
     this.partitions.push(partition);
   }
-
-  async load() {
-    for (const partition of this.partitions) {
-      await partition.load();
-    }
-  }
 }

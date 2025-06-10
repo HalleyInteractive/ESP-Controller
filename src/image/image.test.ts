@@ -21,7 +21,6 @@ import { BinFilePartition } from "./bin-file-partition";
 // Mock the BinFilePartition class
 vi.mock("./bin-file-partition", () => {
   const BinFilePartition = vi.fn();
-  BinFilePartition.prototype.load = vi.fn(() => Promise.resolve(true));
   return { BinFilePartition };
 });
 
@@ -61,19 +60,5 @@ describe("ESPImage", () => {
     image.addPartition(mockPartition);
     expect(image.partitions.length).toBe(1);
     expect(image.partitions[0]).toBe(mockPartition);
-  });
-
-  it("should call load on all partitions", async () => {
-    const image = new ESPImage();
-    const mockPartition1 = { load: vi.fn().mockResolvedValue(true) };
-    const mockPartition2 = { load: vi.fn().mockResolvedValue(true) };
-
-    image.addPartition(mockPartition1 as unknown as BinFilePartition);
-    image.addPartition(mockPartition2 as unknown as BinFilePartition);
-
-    await image.load();
-
-    expect(mockPartition1.load).toHaveBeenCalledTimes(1);
-    expect(mockPartition2.load).toHaveBeenCalledTimes(1);
   });
 });
