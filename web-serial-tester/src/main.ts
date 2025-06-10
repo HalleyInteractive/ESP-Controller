@@ -7,6 +7,8 @@ import {
   syncEsp,
   flashImage,
 } from "../../src/serial/serial-controller";
+import { NVSPartition } from "../../src/nvs/nvs-partition";
+import { PartitionTable } from "../../src/partition/partition-table";
 
 // --- Get references to our HTML elements ---
 const connectButton = document.getElementById(
@@ -35,9 +37,6 @@ export async function init() {
     statusDiv.textContent = `Status: Connected!`;
     connectButton.disabled = true; // Disable button after successful connection
 
-    const logStreamReader = createLogStreamReader(connection);
-    logToConsole(logStreamReader);
-
     console.log("Connection successful:", connection);
   } catch (error: unknown) {
     // Handle errors, like the user clicking "Cancel"
@@ -48,11 +47,24 @@ export async function init() {
   }
 }
 
+async function setupLogStream() {
+  const logStreamReader = createLogStreamReader(connection);
+  logToConsole(logStreamReader);
+}
+
 async function flashTestImage() {
+  const partitionTable = PartitionTable.singleFactoryAppNoOta();
+
   const image = new ESPImage();
   image.addBootloader("./binary/bootloader.bin");
-  image.addPartitionTable("./binary/partition-table.bin");
+  image.addPartition(partitionTable);
+  // image.addPartitionTable("./binary/partition-table.bin");
   image.addApp("./binary/simple.bin");
+
+  const nvsPartition = new NVSPartition(0x9000, "nvs.bin");
+  nvsPartition.writeEntry("test", "MyWiFi", "wifi");
+  nvsPartition.writeEntry("test", "MyPassword", "wifi");
+  image.addPartition(nvsPartition);
 
   await flashImage(connection, image);
 }
@@ -77,6 +89,7 @@ connectButton.addEventListener("click", init);
   connection,
   syncEsp,
   flashTestImage,
+  setupLogStream,
 };
 
 statusDiv.textContent = "Status: Ready. Click the button to connect.";
