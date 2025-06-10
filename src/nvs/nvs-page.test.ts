@@ -179,7 +179,7 @@ describe("NVSPage", () => {
         .mockReturnValue(12345); // All calls will now return this hash
 
       const entry1 = page.writeEntry("key1", 100, 1);
-      const entry2 = page.writeEntry("key2", 200, 2);
+      page.writeEntry("key2", 200, 2);
 
       // The hash map would only store the index for the second entry ('key2').
       // We now try to find the first entry ('key1'), which should trigger a linear scan.
