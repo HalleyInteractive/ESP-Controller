@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import { SparkMD5 } from "../utils/md5";
 import { PartitionEntry } from "./partition-entry";
 import {
   AppPartitionSubType,
@@ -22,6 +21,7 @@ import {
   PartitionDefinition,
   PartitionType,
 } from "./partition-types";
+import SparkMD5 from "spark-md5";
 
 const PARTITION_TABLE_OFFSET = 0x8000;
 const PARTITION_TABLE_SIZE = 0x1000;
@@ -62,10 +62,12 @@ export class PartitionTable {
     }
 
     if (enableMD5) {
-      const md5 = new SparkMD5.ArrayBuffer();
-      md5.append(binary.buffer);
-      const checksum = new Uint8Array(md5.end(true));
-      const md5Entry = new Uint8Array([...MD5_PARTITION_BEGIN, ...checksum]);
+      // Use SparkMD5.ArrayBuffer.hash for binary data
+      const checksum = SparkMD5.ArrayBuffer.hash(binary, true);
+      const md5Entry = new Uint8Array([
+        ...MD5_PARTITION_BEGIN,
+        ...new Uint8Array(checksum),
+      ]);
       binary = new Uint8Array([...binary, ...md5Entry]);
     }
 

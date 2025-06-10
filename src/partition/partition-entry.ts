@@ -17,7 +17,6 @@
 import {
   PartitionDefinition,
   PartitionFlags,
-  PartitionSubType,
   PartitionType,
 } from "./partition-types";
 
@@ -27,7 +26,7 @@ const SIZEOF_STRUCT = 32;
 export class PartitionEntry {
   name: string;
   type: PartitionType;
-  subType: PartitionSubType;
+  subType: number;
   offset: number;
   size: number;
   flags: PartitionFlags;

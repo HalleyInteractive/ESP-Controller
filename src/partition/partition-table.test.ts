@@ -16,7 +16,11 @@
 
 import { describe, it, expect } from "vitest";
 import { PartitionTable } from "./partition-table";
-import { PartitionType, PartitionSubType } from "./partition-types";
+import {
+  AppPartitionSubType,
+  DataPartitionSubType,
+  PartitionType,
+} from "./partition-types";
 
 describe("PartitionTable", () => {
   it("should generate a valid binary for a simple partition table", () => {
@@ -39,37 +43,37 @@ describe("PartitionTable", () => {
       {
         name: "nvs",
         type: PartitionType.DATA,
-        subType: PartitionSubType.NVS,
+        subType: DataPartitionSubType.NVS,
         size: 0x4000,
       },
       {
         name: "otadata",
         type: PartitionType.DATA,
-        subType: PartitionSubType.OTA,
+        subType: DataPartitionSubType.OTA,
         size: 0x2000,
       },
       {
         name: "phy_init",
         type: PartitionType.DATA,
-        subType: PartitionSubType.PHY,
+        subType: DataPartitionSubType.PHY,
         size: 0x1000,
       },
       {
         name: "factory",
         type: PartitionType.APP,
-        subType: PartitionSubType.FACTORY,
+        subType: AppPartitionSubType.FACTORY,
         size: 1 * 1024 * 1024,
       },
       {
         name: "ota_0",
         type: PartitionType.APP,
-        subType: PartitionSubType.OTA_0,
+        subType: AppPartitionSubType.OTA_0,
         size: 1 * 1024 * 1024,
       },
       {
         name: "ota_1",
         type: PartitionType.APP,
-        subType: PartitionSubType.OTA_1,
+        subType: AppPartitionSubType.OTA_1,
         size: 1 * 1024 * 1024,
       },
     ]);

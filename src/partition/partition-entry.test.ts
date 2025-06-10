@@ -16,14 +16,18 @@
 
 import { describe, it, expect } from "vitest";
 import { PartitionEntry } from "./partition-entry";
-import { PartitionType, PartitionSubType } from "./partition-types";
+import {
+  AppPartitionSubType,
+  DataPartitionSubType,
+  PartitionType,
+} from "./partition-types";
 
 describe("PartitionEntry", () => {
   it("should create a valid binary representation", () => {
     const entry = new PartitionEntry({
       name: "nvs",
       type: PartitionType.DATA,
-      subType: PartitionSubType.NVS,
+      subType: DataPartitionSubType.NVS,
       offset: 0x9000,
       size: 0x6000,
     });
@@ -35,7 +39,7 @@ describe("PartitionEntry", () => {
     expect(view.getUint8(0)).toBe(0xaa);
     expect(view.getUint8(1)).toBe(0x50);
     expect(view.getUint8(2)).toBe(PartitionType.DATA);
-    expect(view.getUint8(3)).toBe(PartitionSubType.NVS);
+    expect(view.getUint8(3)).toBe(DataPartitionSubType.NVS);
     expect(view.getUint32(4, true)).toBe(0x9000);
     expect(view.getUint32(8, true)).toBe(0x6000);
 
@@ -48,7 +52,7 @@ describe("PartitionEntry", () => {
       new PartitionEntry({
         name: "this is a very long partition name",
         type: PartitionType.APP,
-        subType: PartitionSubType.FACTORY,
+        subType: AppPartitionSubType.FACTORY,
         offset: 0x10000,
         size: 0x100000,
       });
