@@ -205,6 +205,9 @@ export async function syncEsp(connection: SerialConnection): Promise<boolean> {
     let responseReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
 
     try {
+      if (!connection.commandResponseStream) {
+        throw new Error(`No command response stream available.`);
+      }
       responseReader = connection.commandResponseStream.getReader();
 
       const timeoutPromise = sleep(timeoutPerAttempt).then(() => {
@@ -266,6 +269,9 @@ async function readResponse(
 ): Promise<EspCommandPacket> {
   let responseReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
   try {
+    if (!connection.commandResponseStream) {
+      throw new Error(`No command response stream available.`);
+    }
     responseReader = connection.commandResponseStream.getReader();
     const timeoutPromise = sleep(timeout).then(() => {
       throw new Error(
