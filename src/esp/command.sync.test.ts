@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { EspCommandSync } from "./esp.command.sync";
-import { EspPacketDirection, EspCommand } from "./esp.command"; // Assumed import
+import { EspCommandSync } from "./command.sync";
+import { EspPacketDirection, EspCommand } from "./command"; // Assumed import
 
 describe("EspCommandSync", () => {
   it("should initialize with the correct properties for a sync packet", () => {

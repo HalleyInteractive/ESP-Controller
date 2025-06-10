@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { EspCommandSpiSetParams } from "./esp.command.spi-set-params";
-import { EspCommand, EspPacketDirection } from "./esp.command";
+import { EspCommandSpiSetParams } from "./command.spi-set-params";
+import { EspCommand, EspPacketDirection } from "./command";
 
 describe("EspCommandSpiSetParams", () => {
   const totalSize = 4 * 1024 * 1024; // 4MB

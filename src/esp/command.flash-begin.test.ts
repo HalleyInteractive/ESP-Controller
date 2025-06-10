@@ -16,8 +16,8 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 // Adjust these paths to match your project structure
-import { EspCommandFlashBegin } from "./esp.command.flash-begin";
-import { EspCommand, EspPacketDirection } from "./esp.command";
+import { EspCommandFlashBegin } from "./command.flash-begin";
+import { EspCommand, EspPacketDirection } from "./command";
 
 describe("EspCommandFlashBegin", () => {
   // Define mock input values for consistent testing

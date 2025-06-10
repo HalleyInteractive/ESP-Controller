@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "./esp.command";
+import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 
 export class EspCommandSpiSetParams extends EspCommandPacket {
   private paramsData = new ArrayBuffer(24);

@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { EspCommandSpiAttach } from "./esp.command.spi-attach";
-import { EspCommand, EspPacketDirection } from "./esp.command";
+import { EspCommandSpiAttach } from "./command.spi-attach";
+import { EspCommand, EspPacketDirection } from "./command";
 
 describe("EspCommandSpiAttach", () => {
   let spiAttachCommand: EspCommandSpiAttach;

@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { EspCommandFlashData } from "./esp.command.flash-data";
-import { EspCommand, EspPacketDirection } from "./esp.command";
+import { EspCommandFlashData } from "./command.flash-data";
+import { EspCommand, EspPacketDirection } from "./command";
 
 describe("EspCommandFlashData", () => {
   const blockSize = 4096;

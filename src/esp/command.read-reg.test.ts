@@ -15,8 +15,8 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { EspCommandReadReg } from "./esp.command.read-reg";
-import { EspCommand, EspPacketDirection } from "./esp.command";
+import { EspCommandReadReg } from "./command.read-reg";
+import { EspCommand, EspPacketDirection } from "./command";
 
 describe("EspCommandReadReg", () => {
   // Example address from the trace in the protocol documentation

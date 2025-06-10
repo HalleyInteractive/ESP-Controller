@@ -19,17 +19,13 @@ import {
   SlipStreamDecoder,
 } from "./stream-transformers";
 import { sleep, toHex } from "../utils/common";
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "../esp/esp.command";
-import { EspCommandSync } from "../esp/esp.command.sync";
-import { EspCommandSpiAttach } from "../esp/esp.command.spi-attach";
-import { EspCommandSpiSetParams } from "../esp/esp.command.spi-set-params";
+import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
+import { EspCommandSync } from "./command.sync";
+import { EspCommandSpiAttach } from "./command.spi-attach";
+import { EspCommandSpiSetParams } from "./command.spi-set-params";
 import { ESPImage } from "../image/esp.image";
-import { EspCommandFlashData } from "../esp/esp.command.flash-data";
-import { EspCommandFlashBegin } from "../esp/esp.command.flash-begin";
+import { EspCommandFlashData } from "./command.flash-data";
+import { EspCommandFlashBegin } from "./command.flash-begin";
 import { Partition } from "../image/esp.partition";
 
 /**
@@ -69,7 +65,6 @@ export class SerialController {
 
   constructor() {
     this.connection = this.createSerialConnection();
-    console.log("class based controller");
   }
 
   private createSerialConnection(): SerialConnection {

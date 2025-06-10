@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "./esp.command";
+import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 
 export class EspCommandFlashBegin extends EspCommandPacket {
   private flashBeginData = new ArrayBuffer(16);

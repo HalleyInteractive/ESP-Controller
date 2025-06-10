@@ -15,11 +15,7 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "./esp.command";
+import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 
 describe("EspCommandPacket", () => {
   let packet: EspCommandPacket;

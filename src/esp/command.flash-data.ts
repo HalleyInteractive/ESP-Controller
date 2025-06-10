@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "./esp.command";
+import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 
 export class EspCommandFlashData extends EspCommandPacket {
   constructor(image: Uint8Array, sequenceNumber: number, blockSize: number) {

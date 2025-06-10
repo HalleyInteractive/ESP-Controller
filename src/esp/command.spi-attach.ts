@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 
-import {
-  EspCommand,
-  EspCommandPacket,
-  EspPacketDirection,
-} from "./esp.command";
+import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 
 export class EspCommandSpiAttach extends EspCommandPacket {
   private spiAttachData = new ArrayBuffer(8);
