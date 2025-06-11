@@ -1,6 +1,6 @@
 {
   "name": "esp-controller",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Typescript package for connecting and flashing images to your ESP device.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
