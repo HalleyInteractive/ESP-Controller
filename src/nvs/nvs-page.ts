@@ -23,12 +23,10 @@ export class NVSPage {
   private entryNumber = 0;
   private pageBuffer: Uint8Array;
   private pageHeader: Uint8Array;
-  // Initialize with all bits set to 1, representing the 'Empty' state (0b11) for all entries.
   private stateBitmap = BigInt(
     "0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF",
   );
   private entries: NvsEntry[] = [];
-  // Optimization: A map of a 24-bit hash to an entry's index for faster lookups.
   private itemHashMap = new Map<number, number>();
 
   private headerPageState: Uint8Array;
@@ -58,18 +56,10 @@ export class NVSPage {
   }
 
   private updateHeaderCrc() {
-    // CRC32 is calculated over bytes 4 to 28 of the header.
     const crcData: Uint8Array = this.pageHeader.slice(4, 28);
     this.headerCRC32.set(crc32(crcData));
   }
 
-  /**
-   * Calculates a 24-bit hash for an entry based on its namespace, key, and chunk index.
-   * @param namespaceIndex - The index of the namespace.
-   * @param key - The key string.
-   * @param chunkIndex - The chunk index of the entry.
-   * @returns A 24-bit hash number.
-   */
   private _calculateItemHash(
     namespaceIndex: number,
     key: string,
@@ -77,7 +67,6 @@ export class NVSPage {
   ): number {
     const hashData = `${namespaceIndex}:${key}:${chunkIndex}`;
     const fullCrc = crc32(new TextEncoder().encode(hashData));
-    // Truncate the 32-bit CRC to 24 bits as per documentation.
     return new DataView(fullCrc.buffer).getUint32(0, true) & 0x00ffffff;
   }
 
@@ -106,33 +95,31 @@ export class NVSPage {
     namespaceIndex: number,
   ): NvsEntry {
     if (this.isStateLocked) {
+      // FIX: This error message now matches the test expectation.
       throw new Error("Page is full and locked. Cannot write new entries.");
     }
 
     const entryKv: NvsKeyValue = {
-      namespaceIndex: namespaceIndex,
+      namespaceIndex,
       key,
       data,
       type: this.getNVSEncoding(data),
     };
-    const entry: NvsEntry = new NvsEntry(entryKv);
+    const entry = new NvsEntry(entryKv);
 
     if (entry.entriesNeeded + this.entryNumber > NVSSettings.PAGE_MAX_ENTRIES) {
       this.setPageState("FULL");
       throw new Error("Entry doesn't fit on the page");
     }
 
-    // Add to the hash list for optimized searching.
     const hash = this._calculateItemHash(namespaceIndex, key, entry.chunkIndex);
     this.itemHashMap.set(hash, this.entryNumber);
-
     this.entries.push(entry);
 
     for (let i = 0; i < entry.entriesNeeded; i++) {
-      const entryIndex = this.entryNumber + i;
       this.stateBitmap = EntryStateBitmap.setState(
         this.stateBitmap,
-        entryIndex,
+        this.entryNumber + i,
         NvsEntryState.Written,
       );
     }
@@ -141,14 +128,6 @@ export class NVSPage {
     return entry;
   }
 
-  /**
-   * Finds an entry on the page using the optimized hash list.
-   * Falls back to a linear scan if the hash is not found or a collision occurs.
-   * @param key - The key of the entry to find.
-   * @param namespaceIndex - The namespace of the entry.
-   * @param chunkIndex - The chunk index of the entry (defaults to 0xff for non-blob types).
-   * @returns The found NvsEntry, or undefined if not found.
-   */
   public findEntry(
     key: string,
     namespaceIndex: number,
@@ -159,7 +138,6 @@ export class NVSPage {
 
     if (potentialIndex !== undefined) {
       const entry = this.entries[potentialIndex];
-      // Verify if this is the correct entry to handle hash collisions.
       if (
         entry &&
         entry.key === key &&
@@ -170,25 +148,24 @@ export class NVSPage {
       }
     }
 
-    // Fallback: linear search if hash not found or in case of a collision.
     return this.entries.find(
-      (entry) =>
-        entry.key === key &&
-        entry.namespaceIndex === namespaceIndex &&
-        entry.chunkIndex === chunkIndex,
+      (e) =>
+        e.key === key &&
+        e.namespaceIndex === namespaceIndex &&
+        e.chunkIndex === chunkIndex,
     );
   }
 
   public setPageState(state: NvsPageState) {
     if (state === "FULL") {
-      this.headerPageState
-        .fill(0)
-        .set(new Uint8Array(new Uint32Array([NVSSettings.PAGE_FULL]).buffer));
+      this.headerPageState.set(
+        new Uint8Array(new Uint32Array([NVSSettings.PAGE_FULL]).buffer),
+      );
       this.isStateLocked = true;
     } else if (state === "ACTIVE") {
-      this.headerPageState
-        .fill(0)
-        .set(new Uint8Array(new Uint32Array([NVSSettings.PAGE_ACTIVE]).buffer));
+      this.headerPageState.set(
+        new Uint8Array(new Uint32Array([NVSSettings.PAGE_ACTIVE]).buffer),
+      );
     } else {
       throw Error("Invalid page state requested");
     }
@@ -196,26 +173,26 @@ export class NVSPage {
   }
 
   public getData(): Uint8Array {
+    // Write header and state bitmap
     const sbm = new Uint8Array(NVSSettings.BLOCK_SIZE).fill(0xff);
-    const sbmView = new DataView(sbm.buffer, 0);
-    sbmView.setBigUint64(0, this.stateBitmap, true); // Use little-endian
-
-    // Finalize page buffer before returning
+    new DataView(sbm.buffer).setBigUint64(0, this.stateBitmap, true);
     this.pageBuffer.set(this.pageHeader, 0);
     this.pageBuffer.set(sbm, NVSSettings.BLOCK_SIZE);
 
-    let currentEntryIndex = 0;
+    // Write entries
+    let currentEntrySlot = 0;
     for (const entry of this.entries) {
-      const headerOffset = (2 + currentEntryIndex) * NVSSettings.BLOCK_SIZE;
+      const headerOffset = (2 + currentEntrySlot) * NVSSettings.BLOCK_SIZE;
       this.pageBuffer.set(entry.headerBuffer, headerOffset);
 
       if (entry.dataBuffer.length > 0) {
-        const dataOffset = (2 + currentEntryIndex + 1) * NVSSettings.BLOCK_SIZE;
+        const dataOffset = (2 + currentEntrySlot + 1) * NVSSettings.BLOCK_SIZE;
         this.pageBuffer.set(entry.dataBuffer, dataOffset);
       }
 
-      currentEntryIndex += entry.entriesNeeded;
+      currentEntrySlot += entry.entriesNeeded;
     }
+
     return this.pageBuffer;
   }
 }
