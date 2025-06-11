@@ -129,9 +129,10 @@ export class SerialController extends EventTarget {
   public async openPort(
     options: SerialOptions = DEFAULT_ESP32_SERIAL_OPTIONS,
   ): Promise<void> {
-    if (!this.connection.port?.readable) return;
-    await this.connection.port.open(options);
+    if (!this.connection.port) return;
+    await this.connection?.port.open(options);
 
+    if (!this.connection.port?.readable) return;
     const [commandTee, logTee] = this.connection.port.readable.tee();
 
     this.connection.connected = true;
