@@ -1,6 +1,6 @@
 {
   "name": "esp-controller",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Typescript package for connecting and flashing images to your ESP device.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
@@ -43,20 +43,20 @@
   },
   "homepage": "https://github.com/HalleyInteractive/esp-controller#readme",
   "dependencies": {
-    "@eslint/js": "^9.28.0",
     "@types/w3c-web-serial": "^1.0.8",
-    "@vitest/coverage-v8": "^3.2.2",
+    "@types/spark-md5": "^3.0.5",
+    "spark-md5": "^3.0.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.1",
+    "vitest": "^3.2.2",
+    "@eslint/js": "^9.28.0",
     "eslint-config-prettier": "^10.1.5",
     "eslint-plugin-prettier": "^5.4.1",
     "prettier": "^3.5.3",
-    "spark-md5": "^3.0.2",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.1",
-    "vitest": "^3.2.2"
-  },
-  "devDependencies": {
-    "@types/spark-md5": "^3.0.5",
+    "@vitest/coverage-v8": "^3.2.3",
     "@typescript-eslint/eslint-plugin": "^8.33.1",
     "@typescript-eslint/parser": "^8.33.1",
     "eslint": "^9.28.0",
