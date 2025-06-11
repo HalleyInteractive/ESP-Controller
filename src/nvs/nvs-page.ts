@@ -204,11 +204,17 @@ export class NVSPage {
     this.pageBuffer.set(this.pageHeader, 0);
     this.pageBuffer.set(sbm, NVSSettings.BLOCK_SIZE);
 
-    let offset = NVSSettings.BLOCK_SIZE * 2;
+    let currentEntryIndex = 0;
     for (const entry of this.entries) {
-      this.pageBuffer.set(entry.headerBuffer, offset);
-      this.pageBuffer.set(entry.dataBuffer, offset + NVSSettings.BLOCK_SIZE);
-      offset += entry.headerBuffer.length + entry.dataBuffer.length;
+      const headerOffset = (2 + currentEntryIndex) * NVSSettings.BLOCK_SIZE;
+      this.pageBuffer.set(entry.headerBuffer, headerOffset);
+
+      if (entry.dataBuffer.length > 0) {
+        const dataOffset = (2 + currentEntryIndex + 1) * NVSSettings.BLOCK_SIZE;
+        this.pageBuffer.set(entry.dataBuffer, dataOffset);
+      }
+
+      currentEntryIndex += entry.entriesNeeded;
     }
     return this.pageBuffer;
   }
