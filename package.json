@@ -43,23 +43,24 @@
   },
   "homepage": "https://github.com/HalleyInteractive/esp-controller#readme",
   "dependencies": {
-    "@types/w3c-web-serial": "^1.0.8",
     "@types/spark-md5": "^3.0.5",
+    "@types/w3c-web-serial": "^1.0.8",
     "spark-md5": "^3.0.2"
   },
   "devDependencies": {
-    "typescript": "^5.8.3",
-    "typescript-eslint": "^8.33.1",
-    "vitest": "^3.2.2",
     "@eslint/js": "^9.28.0",
-    "eslint-config-prettier": "^10.1.5",
-    "eslint-plugin-prettier": "^5.4.1",
-    "prettier": "^3.5.3",
-    "tsup": "^8.5.0",
-    "@vitest/coverage-v8": "^3.2.3",
     "@typescript-eslint/eslint-plugin": "^8.33.1",
     "@typescript-eslint/parser": "^8.33.1",
+    "@vitest/coverage-v8": "^3.2.3",
+    "csv-parse": "^5.6.0",
     "eslint": "^9.28.0",
-    "inquirer": "^12.6.3"
+    "eslint-config-prettier": "^10.1.5",
+    "eslint-plugin-prettier": "^5.4.1",
+    "inquirer": "^12.6.3",
+    "prettier": "^3.5.3",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.33.1",
+    "vitest": "^3.2.2"
   }
 }
