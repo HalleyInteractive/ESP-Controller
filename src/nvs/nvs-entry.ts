@@ -93,8 +93,13 @@ export class NvsEntry implements NvsKeyValue {
     }
   }
 
+  // In src/nvs/nvs-entry.ts
+
   private setStringEntry() {
     if (typeof this.data === "string") {
+      // FIX: Fill the entire 8-byte data field with 0xff for correct padding.
+      this.headerData.fill(0xff);
+
       const valueWithTerminator = this.data + "\0";
       const encoder = new TextEncoder();
       const data = encoder.encode(valueWithTerminator);
@@ -103,17 +108,20 @@ export class NvsEntry implements NvsKeyValue {
         throw new Error("String values are limited to 4000 bytes.");
       }
 
-      this.entriesNeeded = 1 + Math.ceil(data.length / NVS_BLOCK_SIZE);
+      this.entriesNeeded = 1 + Math.ceil(data.length / NVSSettings.BLOCK_SIZE);
       this.dataBuffer = new Uint8Array(
-        (this.entriesNeeded - 1) * NVS_BLOCK_SIZE,
+        (this.entriesNeeded - 1) * NVSSettings.BLOCK_SIZE,
       ).fill(0xff);
       this.dataBuffer.set(data);
 
       const dataSizeBuffer = new ArrayBuffer(2);
       const dataSizeView = new DataView(dataSizeBuffer);
+      // The true parameter indicates little-endian byte order.
       dataSizeView.setUint16(0, data.length, true);
 
-      this.headerDataSize.set(new Uint8Array(dataSizeBuffer), 0);
+      // Set the size in the first 2 bytes of the 8-byte headerData field.
+      this.headerData.set(new Uint8Array(dataSizeBuffer), 0);
+      // Set the data CRC in the last 4 bytes of the 8-byte headerData field.
       this.headerDataCRC32.set(crc32(data));
     }
   }

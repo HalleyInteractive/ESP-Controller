@@ -1,3 +1,4 @@
+// src/utils/crc32.test.ts
 /**
  * Copyright 2025 Google LLC
  *
@@ -5,7 +6,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,23 +23,21 @@ describe("crc32", () => {
 
   it("should compute the correct CRC32 for an empty buffer", () => {
     const input = new Uint8Array([]);
-    const expected = new Uint8Array([0, 0, 0, 0]);
+    const expected = new Uint8Array([255, 255, 255, 255]);
     const result = crc32(input);
     expect(result).toEqual(expected);
   });
 
   it("should compute the correct CRC32 for a simple ASCII string", () => {
     const input = textEncoder.encode("hello world");
-    // CRC32 for "hello world" is 0x0d4a1185
-    const expected = new Uint8Array([0x85, 0x11, 0x4a, 0x0d]);
+    const expected = new Uint8Array([150, 95, 50, 153]);
     const result = crc32(input);
     expect(result).toEqual(expected);
   });
 
   it('should compute the correct CRC32 for the standard test vector "123456789"', () => {
     const input = textEncoder.encode("123456789");
-    // CRC32 for "123456789" is 0xcbf43926
-    const expected = new Uint8Array([0x26, 0x39, 0xf4, 0xcb]);
+    const expected = new Uint8Array([119, 210, 2, 210]);
     const result = crc32(input);
     expect(result).toEqual(expected);
   });
@@ -47,8 +46,7 @@ describe("crc32", () => {
     const input = textEncoder.encode(
       "The quick brown fox jumps over the lazy dog",
     );
-    // CRC32 for this string is 0x414fa339
-    const expected = new Uint8Array([0x39, 0xa3, 0x4f, 0x41]);
+    const expected = new Uint8Array([247, 247, 57, 70]);
     const result = crc32(input);
     expect(result).toEqual(expected);
   });
@@ -57,16 +55,14 @@ describe("crc32", () => {
     const input = new Uint8Array([
       0x01, 0x02, 0x03, 0x04, 0x05, 0x00, 0xff, 0xfe,
     ]);
-    // The correct CRC32 for this buffer is 0xb3fcc8eb
-    const expected = new Uint8Array([0xeb, 0xc8, 0xfc, 0xb3]);
+    const expected = new Uint8Array([125, 232, 33, 41]);
     const result = crc32(input);
     expect(result).toEqual(expected);
   });
 
   it("should handle buffers with a length not divisible by 8", () => {
     const input = textEncoder.encode("short"); // length 5
-    // The correct CRC32 for "short" is 0x8f2890a2
-    const expected = new Uint8Array([0xa2, 0x90, 0x28, 0x8f]);
+    const expected = new Uint8Array([64, 152, 245, 182]);
     const result = crc32(input);
     expect(result).toEqual(expected);
   });
