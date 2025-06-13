@@ -63,9 +63,7 @@ export class NvsEntry implements NvsKeyValue {
     this.headerChunkIndex = new Uint8Array(this.headerBuffer.buffer, 3, 1);
     this.headerCRC32 = new Uint8Array(this.headerBuffer.buffer, 4, 4);
     this.headerKey = new Uint8Array(this.headerBuffer.buffer, 8, 16);
-    this.headerData = new Uint8Array(this.headerBuffer.buffer, 24, 8).fill(
-      0xff,
-    );
+    this.headerData = new Uint8Array(this.headerBuffer.buffer, 24, 8);
     this.headerDataSize = new Uint8Array(this.headerBuffer.buffer, 24, 4);
     this.headerDataCRC32 = new Uint8Array(this.headerBuffer.buffer, 28, 4);
     this.dataBuffer = new Uint8Array(0);
@@ -123,8 +121,14 @@ export class NvsEntry implements NvsKeyValue {
   private setPrimitiveEntry() {
     if (typeof this.data === "number") {
       this.entriesNeeded = 1;
-      const dataBuffer = new ArrayBuffer(8);
-      const dataView = new DataView(dataBuffer);
+      // First, fill the entire 8-byte data field with 0xff for correct padding
+      this.headerData.fill(0xff);
+
+      const dataView = new DataView(
+        this.headerData.buffer,
+        this.headerData.byteOffset,
+        8,
+      );
 
       switch (this.type) {
         case NvsType.U8:
@@ -154,7 +158,6 @@ export class NvsEntry implements NvsKeyValue {
         default:
           throw new Error(`Unsupported primitive type: ${this.type}`);
       }
-      this.headerData.set(new Uint8Array(dataBuffer));
     }
   }
 

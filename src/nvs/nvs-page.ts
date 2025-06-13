@@ -50,7 +50,13 @@ export class NVSPage {
 
   private setPageHeader() {
     this.setPageState("ACTIVE");
-    this.headerPageNumber.set([this.pageNumber]);
+    // Use DataView to correctly set the 32-bit page number in little-endian format
+    const pageNumView = new DataView(
+      this.headerPageNumber.buffer,
+      this.headerPageNumber.byteOffset,
+      4,
+    );
+    pageNumView.setUint32(0, this.pageNumber, true);
     this.headerVersion.set([this.version]);
     this.updateHeaderCrc();
   }
