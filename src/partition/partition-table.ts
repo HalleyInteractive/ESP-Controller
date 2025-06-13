@@ -25,6 +25,7 @@ import {
 import SparkMD5 from "spark-md5";
 
 const PARTITION_TABLE_OFFSET = 0x8000;
+const MAX_PARTITION_LENGTH = 0xc00;
 const PARTITION_TABLE_SIZE = 0x1000;
 const MD5_PARTITION_BEGIN = new Uint8Array([
   0xeb,
@@ -79,7 +80,7 @@ export class PartitionTable implements Partition {
       binary = new Uint8Array([...binary, ...md5Entry]);
     }
 
-    const padding = new Uint8Array(PARTITION_TABLE_SIZE - binary.length).fill(
+    const padding = new Uint8Array(MAX_PARTITION_LENGTH - binary.length).fill(
       0xff,
     );
     return new Uint8Array([...binary, ...padding]);

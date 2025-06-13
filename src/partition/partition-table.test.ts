@@ -27,7 +27,7 @@ describe("PartitionTable", () => {
     const table = PartitionTable.singleFactoryAppNoOta();
     const binary = table.toBinary();
 
-    expect(binary.length).toBe(0x1000);
+    expect(binary.length).toBe(0xc00);
 
     const view = new DataView(binary.buffer);
     // nvs
