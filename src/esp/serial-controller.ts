@@ -144,6 +144,27 @@ export class SerialController extends EventTarget {
     );
   }
 
+  public async disconnect(): Promise<void> {
+    if (!this.connection.connected || !this.connection.port) {
+      return;
+    }
+
+    // Abort any ongoing stream operations
+    this.connection.abortStreamController?.abort();
+
+    try {
+      await this.connection.port.close();
+    } catch (error) {
+      // The port might already be closed or disconnected by the device.
+      console.error("Failed to close the serial port:", error);
+    }
+
+    // Reset the connection state, but keep the port reference
+    const port = this.connection.port;
+    this.connection = this.createSerialConnection();
+    this.connection.port = port;
+  }
+
   public async sendResetPulse(): Promise<void> {
     if (!this.connection.port) return;
     this.connection.port.setSignals({

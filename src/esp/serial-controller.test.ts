@@ -293,4 +293,46 @@ describe("SerialController", () => {
       reader2?.releaseLock();
     });
   });
+
+  describe("disconnect", () => {
+    it("should do nothing if not connected", async () => {
+      serialController.connection.connected = false;
+      await serialController.disconnect();
+      expect(mockPort.close).not.toHaveBeenCalled();
+    });
+
+    it("should abort streams, close the port, and reset connection state", async () => {
+      await serialController.openPort();
+      serialController.connection.synced = true;
+      const abortSpy = vi.spyOn(
+        serialController.connection.abortStreamController!,
+        "abort",
+      );
+
+      await serialController.disconnect();
+
+      expect(abortSpy).toHaveBeenCalledOnce();
+      expect(mockPort.close).toHaveBeenCalledOnce();
+      expect(serialController.connection.port).toBe(mockPort);
+      expect(serialController.connection.connected).toBe(false);
+      expect(serialController.connection.synced).toBe(false);
+      expect(serialController.connection.readable).toBe(null);
+      expect(serialController.connection.writable).toBe(null);
+    });
+
+    it("should reset connection state even if closing the port fails", async () => {
+      await serialController.openPort();
+      mockPort.close.mockRejectedValueOnce(new Error("Failed to close"));
+      const consoleErrorSpy = vi
+        .spyOn(console, "error")
+        .mockImplementation(() => {});
+
+      await serialController.disconnect();
+
+      expect(mockPort.close).toHaveBeenCalledOnce();
+      expect(serialController.connection.connected).toBe(false);
+      expect(serialController.connection.port).toBe(mockPort);
+      consoleErrorSpy.mockRestore();
+    });
+  });
 });
