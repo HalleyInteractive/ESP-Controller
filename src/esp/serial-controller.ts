@@ -133,14 +133,16 @@ export class SerialController extends EventTarget {
     await this.connection?.port.open(options);
 
     if (!this.connection.port?.readable) return;
+
+    this.connection.abortStreamController = new AbortController();
     const [commandTee, logTee] = this.connection.port.readable.tee();
 
     this.connection.connected = true;
     this.connection.readable = logTee;
     this.connection.writable = this.connection.port.writable;
-    this.connection.abortStreamController = new AbortController();
     this.connection.commandResponseStream = commandTee.pipeThrough(
       new SlipStreamDecoder(),
+      { signal: this.connection.abortStreamController.signal },
     );
   }
 
