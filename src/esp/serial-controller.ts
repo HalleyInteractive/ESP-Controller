@@ -255,35 +255,37 @@ export class SerialController extends EventTarget {
         });
 
         while (true) {
-          const result = await Promise.race([
+          const { value, done } = await Promise.race([
             responseReader.read(),
             timeoutPromise,
           ]);
 
-          const { value, done } = result;
-
           if (done) {
-            break;
+            throw new Error("Stream closed unexpectedly while syncing.");
           }
 
           if (value) {
-            const responsePacket = new EspCommandPacket();
-            responsePacket.parseResponse(value);
+            try {
+              const responsePacket = new EspCommandPacket();
+              responsePacket.parseResponse(value);
 
-            if (responsePacket.command === EspCommand.SYNC) {
-              console.log("SYNCED successfully.", responsePacket);
-              this.connection.synced = true;
-              this.dispatchEvent(
-                new CustomEvent("sync-progress", {
-                  detail: { progress: 100 },
-                }),
-              );
-              return true;
+              if (responsePacket.command === EspCommand.SYNC) {
+                console.log("SYNCED successfully.", responsePacket);
+                this.connection.synced = true;
+                this.dispatchEvent(
+                  new CustomEvent("sync-progress", {
+                    detail: { progress: 100 },
+                  }),
+                );
+                return true;
+              }
+            } catch (e) {
+              // Ignore parsing errors and continue reading from the stream
             }
           }
         }
       } catch (e) {
-        console.log(`Sync attempt ${i + 1} timed out.`, e);
+        console.log(`Sync attempt ${i + 1} failed.`, e);
       } finally {
         if (responseReader) {
           responseReader.releaseLock();
@@ -490,21 +492,25 @@ export class SerialController extends EventTarget {
         }
 
         if (value) {
-          const responsePacket = new EspCommandPacket();
-          responsePacket.parseResponse(value);
+          try {
+            const responsePacket = new EspCommandPacket();
+            responsePacket.parseResponse(value);
 
-          if (
-            responsePacket.direction === EspPacketDirection.RESPONSE &&
-            responsePacket.command === expectedCommand
-          ) {
-            if (responsePacket.error > 0) {
-              throw new Error(
-                `Device returned error for ${
-                  EspCommand[expectedCommand]
-                }: ${responsePacket.getErrorMessage(responsePacket.error)}`,
-              );
+            if (
+              responsePacket.direction === EspPacketDirection.RESPONSE &&
+              responsePacket.command === expectedCommand
+            ) {
+              if (responsePacket.error > 0) {
+                throw new Error(
+                  `Device returned error for ${
+                    EspCommand[expectedCommand]
+                  }: ${responsePacket.getErrorMessage(responsePacket.error)}`,
+                );
+              }
+              return responsePacket;
             }
-            return responsePacket;
+          } catch (e) {
+            // Ignore parsing errors and continue reading
           }
         }
       }
