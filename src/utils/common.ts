@@ -57,3 +57,18 @@ export function slipEncode(buffer: Uint8Array): Uint8Array {
   encoded.push(SlipStreamBytes.END);
   return new Uint8Array(encoded);
 }
+
+/**
+ * Decodes a Base64 string into a Uint8Array.
+ * @param base64 The Base64 encoded string.
+ * @returns The decoded Uint8Array.
+ */
+export function base64ToUint8Array(base64: string): Uint8Array {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}

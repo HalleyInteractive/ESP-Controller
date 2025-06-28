@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ * https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -22,6 +22,7 @@ export enum EspPacketDirection {
 }
 
 export enum EspCommand {
+  // Commands supported by ROM and Stub loaders
   FLASH_BEGIN = 0x02,
   FLASH_DATA = 0x03,
   FLASH_END = 0x04,
@@ -38,6 +39,12 @@ export enum EspCommand {
   FLASH_DEFL_DATA = 0x11,
   FLASH_DEFL_END = 0x12,
   SPI_FLASH_MD5 = 0x13,
+
+  // Stub loader only commands
+  ERASE_FLASH = 0xd0,
+  ERASE_REGION = 0xd1,
+  READ_FLASH = 0xd2,
+  RUN_USER_CODE = 0xd3,
 }
 
 export class EspCommandPacket {

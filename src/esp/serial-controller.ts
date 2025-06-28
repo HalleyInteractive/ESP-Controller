@@ -18,15 +18,21 @@ import {
   createLineBreakTransformer,
   SlipStreamDecoder,
 } from "./stream-transformers";
-import { sleep, toHex } from "../utils/common";
+import { sleep, toHex, base64ToUint8Array } from "../utils/common";
 import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
+import { ESPImage } from "../image/image";
+import { Partition } from "../partition/partition";
+
+// Import all necessary command classes
 import { EspCommandSync } from "./command.sync";
 import { EspCommandSpiAttach } from "./command.spi-attach";
 import { EspCommandSpiSetParams } from "./command.spi-set-params";
-import { ESPImage } from "../image/image";
-import { EspCommandFlashData } from "./command.flash-data";
 import { EspCommandFlashBegin } from "./command.flash-begin";
-import { Partition } from "../partition/partition";
+import { EspCommandFlashData } from "./command.flash-data";
+import { EspCommandReadReg } from "./command.read-reg";
+import { EspCommandMemBegin } from "./command.mem-begin";
+import { EspCommandMemData } from "./command.mem-data";
+import { EspCommandMemEnd } from "./command.mem-end";
 
 /**
  * Default serial options when connecting to an ESP32.
@@ -41,6 +47,31 @@ const DEFAULT_ESP32_SERIAL_OPTIONS: SerialOptions = {
 };
 
 /**
+ * Known chip families and their magic values.
+ */
+export enum ChipFamily {
+  ESP32 = 0x00f01d83,
+  ESP32S2 = 0x000007c6,
+  ESP32S3 = 0x9,
+  ESP32C3 = 0x6921506f,
+  ESP32C6 = 0x2ce0806f,
+  ESP32H2 = 0xca02c06f,
+  ESP8266 = 0xfff0c101,
+  UNKNOWN = 0xffffffff,
+}
+
+/**
+ * Interface representing the structure of a flasher stub JSON file.
+ */
+export interface Stub {
+  entry: number;
+  text_start: number;
+  text: string; // Base64 encoded
+  data_start: number;
+  data: string; // Base64 encoded
+}
+
+/**
  * Interface defining the properties of a serial connection.
  */
 export interface SerialConnection {
@@ -50,6 +81,8 @@ export interface SerialConnection {
   connected: boolean;
   /** Indicates if the connection has been synchronized with the device. */
   synced: boolean;
+  /** The detected chip family. Null if not yet detected. */
+  chip: ChipFamily | null;
   /** The readable stream for receiving data from the serial port. Null if not connected. */
   readable: ReadableStream<Uint8Array> | null;
   /** The writable stream for sending data to the serial port. Null if not connected. */
@@ -73,6 +106,7 @@ export class SerialController extends EventTarget {
       port: undefined,
       connected: false,
       synced: false,
+      chip: null,
       readable: null,
       writable: null,
       abortStreamController: undefined,
@@ -83,6 +117,7 @@ export class SerialController extends EventTarget {
   public async requestPort(): Promise<void> {
     this.connection.port = await navigator.serial.requestPort();
     this.connection.synced = false;
+    this.connection.chip = null;
   }
 
   public createLogStreamReader(): () => AsyncGenerator<
@@ -263,6 +298,169 @@ export class SerialController extends EventTarget {
     return false;
   }
 
+  public async detectChip(): Promise<ChipFamily> {
+    if (!this.connection.synced) {
+      throw new Error("Device must be synced to detect chip type.");
+    }
+    const CHIP_DETECT_MAGIC_REG_ADDR = 0x40001000;
+    const readRegCmd = new EspCommandReadReg(CHIP_DETECT_MAGIC_REG_ADDR);
+    await this.writeToConnection(readRegCmd.getSlipStreamEncodedPacketData());
+    const response = await this.readResponse(EspCommand.READ_REG);
+
+    const magicValue = response.value;
+
+    const numericChipValues = Object.values(ChipFamily).filter(
+      (v) => typeof v === "number",
+    ) as ChipFamily[];
+
+    const chip =
+      numericChipValues.find((c) => c === magicValue) || ChipFamily.UNKNOWN;
+
+    this.connection.chip = chip;
+    console.log(
+      `Detected chip: ${ChipFamily[chip]} (Magic value: ${toHex(new Uint8Array(new Uint32Array([magicValue]).buffer))})`,
+    );
+
+    if (chip === ChipFamily.UNKNOWN) {
+      throw new Error("Could not detect a supported chip family.");
+    }
+    return chip;
+  }
+
+  public async loadToRam(
+    binary: Uint8Array,
+    offset: number,
+    execute = false,
+    entryPoint = 0,
+  ) {
+    console.log(
+      `Loading binary to RAM at offset ${toHex(new Uint8Array(new Uint32Array([offset]).buffer))}`,
+    );
+    const packetSize = 1460;
+    const numPackets = Math.ceil(binary.length / packetSize);
+
+    const memBeginCmd = new EspCommandMemBegin(
+      binary.length,
+      numPackets,
+      packetSize,
+      offset,
+    );
+    await this.writeToConnection(memBeginCmd.getSlipStreamEncodedPacketData());
+    await this.readResponse(EspCommand.MEM_BEGIN);
+
+    for (let i = 0; i < numPackets; i++) {
+      const memDataCmd = new EspCommandMemData(binary, i, packetSize);
+      await this.writeToConnection(memDataCmd.getSlipStreamEncodedPacketData());
+      await this.readResponse(EspCommand.MEM_DATA, 1000);
+    }
+
+    if (execute) {
+      console.log(`Executing from entry point ${entryPoint}`);
+      const memEndCmd = new EspCommandMemEnd(1, entryPoint);
+      await this.writeToConnection(memEndCmd.getSlipStreamEncodedPacketData());
+      await this.readResponse(EspCommand.MEM_END);
+    }
+  }
+
+  /**
+   * Fetches the stub for the given chip family from the local file system.
+   * @param chip The chip family to fetch the stub for.
+   * @returns A promise that resolves to the Stub object.
+   */
+  private async getStubForChip(chip: ChipFamily): Promise<Stub> {
+    const chipNameMap: { [key in ChipFamily]?: string } = {
+      [ChipFamily.ESP32]: "32",
+      [ChipFamily.ESP32S2]: "32s2",
+      [ChipFamily.ESP32S3]: "32s3",
+      [ChipFamily.ESP32C3]: "32c3",
+      [ChipFamily.ESP32C6]: "32c6",
+      [ChipFamily.ESP32H2]: "32h2",
+      [ChipFamily.ESP8266]: "8266",
+    };
+
+    const chipName = chipNameMap[chip];
+    if (!chipName) {
+      throw new Error(`No stub file mapping for chip: ${ChipFamily[chip]}`);
+    }
+
+    const stubUrl = `./stub-flasher/stub_flasher_${chipName}.json`;
+    console.log(`Fetching stub from ${stubUrl}`);
+
+    try {
+      const response = await fetch(stubUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch stub file: ${response.statusText}`);
+      }
+      return await response.json();
+    } catch (e) {
+      console.error(`Error loading stub for ${ChipFamily[chip]}:`, e);
+      throw e;
+    }
+  }
+
+  private async uploadStub(stub: Stub): Promise<void> {
+    const text = base64ToUint8Array(stub.text);
+    const data = base64ToUint8Array(stub.data);
+
+    await this.loadToRam(text, stub.text_start, false);
+    await this.loadToRam(data, stub.data_start, false);
+
+    console.log(`Starting stub at entry point 0x${stub.entry.toString(16)}...`);
+    const memEndCmd = new EspCommandMemEnd(1, stub.entry);
+    await this.writeToConnection(memEndCmd.getSlipStreamEncodedPacketData());
+
+    await this.readResponse(EspCommand.MEM_END);
+    console.log("Stub started successfully.");
+
+    await this.awaitOhaiResponse();
+  }
+
+  private async awaitOhaiResponse(timeout = 2000): Promise<void> {
+    let responseReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+    // The "OHAI" payload is 4 bytes: 0x4F, 0x48, 0x41, 0x49
+    const ohaiPacket = new Uint8Array([0x4f, 0x48, 0x41, 0x49]);
+
+    try {
+      if (!this.connection.commandResponseStream) {
+        throw new Error("No command response stream available.");
+      }
+      responseReader = this.connection.commandResponseStream.getReader();
+
+      const timeoutPromise = sleep(timeout).then(() => {
+        throw new Error(
+          `Timeout: Did not receive "OHAI" from stub within ${timeout}ms.`,
+        );
+      });
+
+      console.log("Waiting for 'OHAI' packet from stub...");
+
+      while (true) {
+        const { value, done } = await Promise.race([
+          responseReader.read(),
+          timeoutPromise,
+        ]);
+
+        if (done) {
+          throw new Error(
+            "Stream closed unexpectedly while waiting for 'OHAI'.",
+          );
+        }
+
+        // Compare the received packet with the expected "OHAI" signature
+        if (value && value.length === ohaiPacket.length) {
+          if (value.every((byte, index) => byte === ohaiPacket[index])) {
+            console.log("'OHAI' packet received, stub confirmed.");
+            return; // Success
+          }
+        }
+      }
+    } finally {
+      if (responseReader) {
+        responseReader.releaseLock();
+      }
+    }
+  }
+
   private async readResponse(
     expectedCommand: EspCommand,
     timeout = 2000,
@@ -365,6 +563,10 @@ export class SerialController extends EventTarget {
     console.log(`Flash data for ${partition.filename} sent successfully.`);
   }
 
+  /**
+   * Main method to flash a complete image.
+   * @param image The ESPImage to flash.
+   */
   public async flashImage(image: ESPImage) {
     if (!this.connection.connected) {
       throw new Error("Device is not connected.");
@@ -378,6 +580,13 @@ export class SerialController extends EventTarget {
         );
       }
     }
+
+    if (!this.connection.chip) {
+      await this.detectChip();
+    }
+
+    const stub = await this.getStubForChip(this.connection.chip!);
+    await this.uploadStub(stub);
 
     const attachCmd = new EspCommandSpiAttach();
     await this.writeToConnection(attachCmd.getSlipStreamEncodedPacketData());
