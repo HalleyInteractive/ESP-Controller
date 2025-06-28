@@ -39,16 +39,18 @@ npm install esp-controller
 
 You can then import the necessary classes and functions into your TypeScript project to begin interacting with your ESP device.
 
+```typescript
 import { SerialController } from 'esp-controller';
 
-const connectButton \= document.getElementById('connect');  
+const connectButton \= document.getElementById('connect');
 const serialController \= new SerialController();
 
-connectButton.onclick \= async () \=\> {  
- await serialController.connect();  
- console.log('Connected\!');  
- // You can now flash firmware, partitions, etc.  
+connectButton.onclick \= async () \=\> {
+ await serialController.connect();
+ console.log('Connected\!');
+ // You can now flash firmware, partitions, etc.
 };
+```
 
 ## **Usage Examples**
 
@@ -57,15 +59,17 @@ connectButton.onclick \= async () \=\> {
 1. Obtain your firmware binary file (.bin).
 2. Use the flash method from the SerialController to write it to the device.
 
-// Assuming 'serialController' is an instance of SerialController  
-// and 'firmwareBinary' is an ArrayBuffer containing your firmware.  
+```typescript
+// Assuming 'serialController' is an instance of SerialController
+// and 'firmwareBinary' is an ArrayBuffer containing your firmware.
 const flashAddress \= 0x10000;
 
-await serialController.flash(firmwareBinary, flashAddress, (progress) \=\> {  
- console.log(\`Flashing progress: ${progress}%\`);  
+await serialController.flash(firmwareBinary, flashAddress, (progress) \=\> {
+ console.log(\`Flashing progress: ${progress}%\`);
 });
 
 console.log('Flashed successfully\!');
+```
 
 ### **Programmatically Generating and Flashing a Partition Table**
 
@@ -76,21 +80,23 @@ Instead of using a CSV file, you can define your partition table directly in cod
 3. Generate the binary using the toBinary() method.
 4. Flash the resulting binary.
 
+```typescript
 import { PartitionTable, PartitionEntry, PartitionType } from 'esp-controller/partition';
 
-// 1\. Define partition entries  
-const nvsEntry \= new PartitionEntry('nvs', PartitionType.DATA, 0, 0x9000, '20K');  
-const otaDataEntry \= new PartitionEntry('otadata', PartitionType.DATA, 1, 0xe000, '8K');  
+// 1\. Define partition entries
+const nvsEntry \= new PartitionEntry('nvs', PartitionType.DATA, 0, 0x9000, '20K');
+const otaDataEntry \= new PartitionEntry('otadata', PartitionType.DATA, 1, 0xe000, '8K');
 const app0Entry \= new PartitionEntry('app0', PartitionType.APP, 0, 0x10000, '1M');
 
-// 2\. Create a partition table  
+// 2\. Create a partition table
 const partitionTable \= new PartitionTable(nvsEntry, otaDataEntry, app0Entry);
 
-// 3\. Generate the binary  
+// 3\. Generate the binary
 const partitionTableBinary \= partitionTable.toBinary();
 
-// 4\. Flash the binary to the device (usually at 0x8000)  
+// 4\. Flash the binary to the device (usually at 0x8000)
 await serialController.flash(partitionTableBinary, 0x8000);
+```
 
 ### **Programmatically Generating and Flashing NVS**
 
@@ -101,24 +107,26 @@ You can generate an NVS binary with your desired key-value pairs for device prov
 3. Generate the binary using toBinary().
 4. Flash the binary to the NVS partition (the offset is defined in your partition table).
 
+```typescript
 import { NVSPartition, NVSEntry, NVSEncoding } from 'esp-controller/nvs';
 
-// 1\. Create NVS entries  
-const ssidEntry \= new NVSEntry('storage', 'wifi_ssid', NVSEncoding.STRING, 'my-wifi-network');  
-const passwordEntry \= new NVSEntry('storage', 'wifi_pass', NVSEncoding.STRING, 's3cr3t_p4ssw0rd');  
+// 1\. Create NVS entries
+const ssidEntry \= new NVSEntry('storage', 'wifi_ssid', NVSEncoding.STRING, 'my-wifi-network');
+const passwordEntry \= new NVSEntry('storage', 'wifi_pass', NVSEncoding.STRING, 's3cr3t_p4ssw0rd');
 const retryCountEntry \= new NVSEntry('app_config', 'retry_count', NVSEncoding.U8, 5);
 
-// 2\. Create an NVS partition and add entries  
-const nvsPartition \= new NVSPartition('my_nvs');  
-nvsPartition.addEntry(ssidEntry);  
-nvsPartition.addEntry(passwordEntry);  
+// 2\. Create an NVS partition and add entries
+const nvsPartition \= new NVSPartition('my_nvs');
+nvsPartition.addEntry(ssidEntry);
+nvsPartition.addEntry(passwordEntry);
 nvsPartition.addEntry(retryCountEntry);
 
-// 3\. Generate the binary data  
+// 3\. Generate the binary data
 const nvsBinary \= await nvsPartition.toBinary('20K'); // Size must match partition table
 
-// 4\. Flash the binary to the NVS partition offset (e.g., 0x9000 from the example above)  
+// 4\. Flash the binary to the NVS partition offset (e.g., 0x9000 from the example above)
 await serialController.flash(nvsBinary, 0x9000);
+```
 
 ## **Troubleshooting**
 
