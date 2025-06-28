@@ -279,7 +279,7 @@ export class SerialController extends EventTarget {
                 );
                 return true;
               }
-            } catch (e) {
+            } catch {
               // Ignore parsing errors and continue reading from the stream
             }
           }
@@ -509,7 +509,7 @@ export class SerialController extends EventTarget {
               }
               return responsePacket;
             }
-          } catch (e) {
+          } catch {
             // Ignore parsing errors and continue reading
           }
         }
