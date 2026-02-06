@@ -39,8 +39,8 @@ describe("NVSPage", () => {
 
     // Mock NvsEntry constructor and properties for consistent testing
     vi.mocked(NvsEntry).mockImplementation(
-      (entryKv: NvsKeyValue) =>
-        ({
+      function (entryKv: NvsKeyValue) {
+        return ({
           entriesNeeded: 1, // Default to 1, can be overridden in specific tests
           chunkIndex: 0xff,
           headerBuffer: new Uint8Array(32).fill(0xaa),
@@ -48,7 +48,8 @@ describe("NVSPage", () => {
           key: entryKv.key,
           namespaceIndex: entryKv.namespaceIndex,
           data: entryKv.data,
-        }) as unknown as NvsEntry,
+        }) as unknown as NvsEntry;
+      },
     );
 
     page = new NVSPage(pageNumber, version);
@@ -105,10 +106,11 @@ describe("NVSPage", () => {
     it("should throw an error if the entry does not fit", () => {
       // Mock that NvsEntry needs more space than available
       vi.mocked(NvsEntry).mockImplementation(
-        () =>
-          ({
+        function () {
+          return ({
             entriesNeeded: NVSSettings.PAGE_MAX_ENTRIES + 1,
-          }) as NvsEntry,
+          }) as NvsEntry;
+        },
       );
 
       expect(() => page.writeEntry("overflow", 1, 1)).toThrow(
