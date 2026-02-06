@@ -22,6 +22,7 @@ import { sleep, toHex, base64ToUint8Array } from "../utils/common";
 import { EspCommand, EspCommandPacket, EspPacketDirection } from "./command";
 import { ESPImage } from "../image/image";
 import { Partition } from "../partition/partition";
+import { version } from "../../package.json";
 
 // Import all necessary command classes
 import { EspCommandSync } from "./command.sync";
@@ -99,6 +100,10 @@ export interface SerialConnection {
   abortStreamController: AbortController | undefined;
   /** A readable stream that contains the slipstream decoded responses from the esp. */
   commandResponseStream: ReadableStream<Uint8Array> | undefined;
+  /** Info about the connected port (VID/PID) to identify it during re-enumeration. */
+  portInfo?: SerialPortInfo;
+  /** Flag to indicate if the device was lost (disconnected). */
+  deviceLost: boolean;
 }
 
 const STUB_FILES: Partial<Record<ChipFamily, Stub>> = {
@@ -117,6 +122,7 @@ export class SerialController extends EventTarget {
   constructor() {
     super();
     this.connection = this.createSerialConnection();
+    console.log(`ESP-Controller v${version} initialized`);
   }
 
   private createSerialConnection(): SerialConnection {
@@ -129,11 +135,14 @@ export class SerialController extends EventTarget {
       writable: null,
       abortStreamController: undefined,
       commandResponseStream: undefined,
+      portInfo: undefined,
+      deviceLost: false,
     };
   }
 
   public async requestPort(): Promise<void> {
     this.connection.port = await navigator.serial.requestPort();
+    this.connection.portInfo = this.connection.port.getInfo();
     this.connection.synced = false;
     this.connection.chip = null;
   }
@@ -197,6 +206,20 @@ export class SerialController extends EventTarget {
       new SlipStreamDecoder(),
       { signal: this.connection.abortStreamController.signal },
     );
+
+    // Listen for disconnects
+    navigator.serial.addEventListener("disconnect", (event) => {
+      if (event.target === this.connection.port) {
+        console.log("Device disconnected (event reported).");
+        this.connection.deviceLost = true;
+        // Force the stream to error out so we break any pending reads
+        try {
+          this.connection.abortStreamController?.abort();
+        } catch (e) {
+          console.error("Error aborting stream on disconnect:", e);
+        }
+      }
+    });
   }
 
   public async disconnect(): Promise<void> {
@@ -222,23 +245,45 @@ export class SerialController extends EventTarget {
 
   public async sendResetPulse(): Promise<void> {
     if (!this.connection.port) return;
-    this.connection.port.setSignals({
-      dataTerminalReady: false,
-      requestToSend: true,
-    });
+
+    // Standard ESP32 Reset Sequence (Modified for Native USB/S3/C3):
+    // 1. DTR=0, RTS=0 (Start)
+    await this.connection.port.setSignals({ dataTerminalReady: false, requestToSend: false });
     await sleep(100);
-    this.connection.port.setSignals({
-      dataTerminalReady: true,
-      requestToSend: false,
-    });
+
+    // 2. DTR=1, RTS=0 (IO0=0, EN=1) -> Prepare Boot (Assert Boot FIRST)
+    // This ensures IO0 is stable Low before we pull Reset Low.
+    await this.connection.port.setSignals({ dataTerminalReady: true, requestToSend: false });
+    await sleep(200);
+
+    // 3. DTR=1, RTS=1 (IO0=0, EN=0) -> Reset (Assert Reset while Boot held)
+    await this.connection.port.setSignals({ dataTerminalReady: true, requestToSend: true });
+    await sleep(200);
+
+    // 4. DTR=1, RTS=0 (IO0=0, EN=1) -> Release Reset (still holding Boot)
+    await this.connection.port.setSignals({ dataTerminalReady: true, requestToSend: false });
+    await sleep(200);
+
+    // 5. DTR=0, RTS=0 (Release all)
+    await this.connection.port.setSignals({ dataTerminalReady: false, requestToSend: false });
     await sleep(100);
   }
 
   public async writeToConnection(data: Uint8Array) {
     if (this.connection.writable) {
       const writer = this.connection.writable.getWriter();
-      await writer.write(data);
-      writer.releaseLock();
+      try {
+        const writePromise = writer.write(data);
+        const timeoutPromise = sleep(500).then(() => {
+          throw new Error("Write timeout - buffer likely full");
+        });
+
+        await Promise.race([writePromise, timeoutPromise]);
+      } catch (e) {
+        console.warn("Write failed or timed out:", e);
+      } finally {
+        writer.releaseLock();
+      }
     }
   }
 
@@ -302,8 +347,56 @@ export class SerialController extends EventTarget {
             }
           }
         }
-      } catch (e) {
+      } catch (e: any) {
         console.log(`Sync attempt ${i + 1} failed.`, e);
+
+        // Check for recognized disconnects or stream errors
+        if (
+          this.connection.deviceLost ||
+          e.name === 'NetworkError' ||
+          e.message?.includes('The device has been lost') ||
+          e.message?.includes('Stream closed unexpectedly') ||
+          e.name === 'AbortError' // Handle the manual abort
+        ) {
+          console.log('Device connection lost. Initiating recovery...');
+          this.connection.connected = false;
+          // Clean up streams if possible
+          try { this.connection.abortStreamController?.abort(); } catch { }
+
+          // Wait for re-enumeration
+          console.log('Waiting for device to re-appear...');
+          await sleep(2000);
+
+          try {
+            const ports = await navigator.serial.getPorts();
+            console.log(`Found ${ports.length} available ports.`);
+            const targetVid = this.connection.portInfo?.usbVendorId;
+            const targetPid = this.connection.portInfo?.usbProductId;
+
+            const recoveredPort = ports.find(p => {
+              const info = p.getInfo();
+              // Match VID/PID. If original didn't have info, we might be out of luck
+              // or just take the first one? Let's be strict for now.
+              return info.usbVendorId === targetVid && info.usbProductId === targetPid;
+            });
+
+            if (recoveredPort) {
+              console.log('Found recovered device port. Reconnecting...');
+              this.connection.port = recoveredPort;
+              // Reset flags
+              this.connection.deviceLost = false;
+              await this.openPort();
+              console.log('Reconnection successful. Resuming sync...');
+              // Reset pulse might be needed again? Or maybe it's already in bootloader?
+              // Usually if we caught it after reset, it should be in bootloader.
+              await sleep(100);
+            } else {
+              console.log('Could not find the device among available ports.');
+            }
+          } catch (recError) {
+            console.error('Error during reconnection attempt:', recError);
+          }
+        }
       } finally {
         if (responseReader) {
           responseReader.releaseLock();
