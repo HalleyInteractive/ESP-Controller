@@ -64,11 +64,7 @@ const slipEncode = (packet: Uint8Array): Uint8Array => {
   return new Uint8Array(encoded);
 };
 
-const createFetchMock = (stub: Stub) =>
-  vi.fn().mockResolvedValue({
-    ok: true,
-    json: () => Promise.resolve(stub),
-  });
+
 
 const createMockSerialPort = () => {
   let streamController: ReadableStreamDefaultController<Uint8Array>;
@@ -117,7 +113,7 @@ describe("SerialController", () => {
     vi.spyOn(
       SerialController.prototype,
       "createLogStreamReader",
-    ).mockReturnValue(async function* () {});
+    ).mockReturnValue(async function* () { });
 
     mockPort = createMockSerialPort();
     serialController = new SerialController();
@@ -369,16 +365,20 @@ describe("SerialController", () => {
     } as ESPImage;
 
     beforeEach(async () => {
-      vi.stubGlobal("fetch", createFetchMock(mockStub));
+      vi.spyOn(serialController as any, "getStubForChip").mockResolvedValue(
+        mockStub,
+      );
       vi.spyOn(serialController, "sync").mockResolvedValue(true);
       vi.spyOn(serialController, "detectChip").mockImplementation(async () => {
         serialController.connection.chip = ChipFamily.ESP32;
         return ChipFamily.ESP32;
       });
-      vi.spyOn(serialController, "uploadStub").mockResolvedValue();
+      vi.spyOn(serialController as any, "uploadStub").mockResolvedValue(
+        undefined,
+      );
       vi.spyOn(serialController, "flashPartition").mockResolvedValue();
       vi.spyOn(serialController, "sendResetPulse").mockResolvedValue();
-      vi.spyOn(serialController, "readResponse").mockResolvedValue(
+      vi.spyOn(serialController as any, "readResponse").mockResolvedValue(
         new EspCommandPacket(),
       );
 
@@ -399,12 +399,14 @@ describe("SerialController", () => {
 
       expect(serialController.sync).toHaveBeenCalledTimes(0);
       expect(serialController.detectChip).toHaveBeenCalledTimes(0);
-      expect(fetch).toHaveBeenCalledWith("./stub-flasher/stub_flasher_32.json");
-      expect(serialController.uploadStub).toHaveBeenCalledWith(mockStub);
-      expect(serialController.readResponse).toHaveBeenCalledWith(
+
+      expect((serialController as any).uploadStub).toHaveBeenCalledWith(
+        mockStub,
+      );
+      expect((serialController as any).readResponse).toHaveBeenCalledWith(
         EspCommand.SPI_ATTACH,
       );
-      expect(serialController.readResponse).toHaveBeenCalledWith(
+      expect((serialController as any).readResponse).toHaveBeenCalledWith(
         EspCommand.SPI_SET_PARAMS,
       );
       expect(serialController.flashPartition).toHaveBeenCalledTimes(2);
@@ -425,16 +427,16 @@ describe("SerialController", () => {
 
       expect(serialController.sync).toHaveBeenCalledOnce();
       expect(serialController.detectChip).toHaveBeenCalledOnce();
-      expect(fetch).toHaveBeenCalledWith("./stub-flasher/stub_flasher_32.json");
     });
 
     it("should dispatch flash-image-progress events", async () => {
       (serialController.flashPartition as Mock).mockRestore();
-      (serialController.readResponse as Mock).mockImplementation(
-        async (): Promise<EspCommandPacket> => {
-          return new EspCommandPacket();
-        },
-      );
+      vi.spyOn(
+        serialController as any,
+        "readResponse",
+      ).mockImplementation(async (): Promise<EspCommandPacket> => {
+        return new EspCommandPacket();
+      });
 
       const dispatchEventSpy = vi.spyOn(serialController, "dispatchEvent");
       await serialController.flashImage(mockImage);

@@ -34,6 +34,14 @@ import { EspCommandMemBegin } from "./command.mem-begin";
 import { EspCommandMemData } from "./command.mem-data";
 import { EspCommandMemEnd } from "./command.mem-end";
 
+import stub32 from "./stub-flasher/stub_flasher_32.json";
+import stub32s2 from "./stub-flasher/stub_flasher_32s2.json";
+import stub32s3 from "./stub-flasher/stub_flasher_32s3.json";
+import stub32c3 from "./stub-flasher/stub_flasher_32c3.json";
+import stub32c6 from "./stub-flasher/stub_flasher_32c6.json";
+import stub32h2 from "./stub-flasher/stub_flasher_32h2.json";
+import stub8266 from "./stub-flasher/stub_flasher_8266.json";
+
 /**
  * Default serial options when connecting to an ESP32.
  */
@@ -92,6 +100,16 @@ export interface SerialConnection {
   /** A readable stream that contains the slipstream decoded responses from the esp. */
   commandResponseStream: ReadableStream<Uint8Array> | undefined;
 }
+
+const STUB_FILES: Partial<Record<ChipFamily, Stub>> = {
+  [ChipFamily.ESP32]: stub32 as unknown as Stub,
+  [ChipFamily.ESP32S2]: stub32s2 as unknown as Stub,
+  [ChipFamily.ESP32S3]: stub32s3 as unknown as Stub,
+  [ChipFamily.ESP32C3]: stub32c3 as unknown as Stub,
+  [ChipFamily.ESP32C6]: stub32c6 as unknown as Stub,
+  [ChipFamily.ESP32H2]: stub32h2 as unknown as Stub,
+  [ChipFamily.ESP8266]: stub8266 as unknown as Stub,
+};
 
 export class SerialController extends EventTarget {
   public connection: SerialConnection;
@@ -365,39 +383,16 @@ export class SerialController extends EventTarget {
   }
 
   /**
-   * Fetches the stub for the given chip family from the local file system.
+   * Fetches the stub for the given chip family from the bundled JSON files.
    * @param chip The chip family to fetch the stub for.
    * @returns A promise that resolves to the Stub object.
    */
   private async getStubForChip(chip: ChipFamily): Promise<Stub> {
-    const chipNameMap: { [key in ChipFamily]?: string } = {
-      [ChipFamily.ESP32]: "32",
-      [ChipFamily.ESP32S2]: "32s2",
-      [ChipFamily.ESP32S3]: "32s3",
-      [ChipFamily.ESP32C3]: "32c3",
-      [ChipFamily.ESP32C6]: "32c6",
-      [ChipFamily.ESP32H2]: "32h2",
-      [ChipFamily.ESP8266]: "8266",
-    };
-
-    const chipName = chipNameMap[chip];
-    if (!chipName) {
+    const stub = STUB_FILES[chip];
+    if (!stub) {
       throw new Error(`No stub file mapping for chip: ${ChipFamily[chip]}`);
     }
-
-    const stubUrl = `./stub-flasher/stub_flasher_${chipName}.json`;
-    console.log(`Fetching stub from ${stubUrl}`);
-
-    try {
-      const response = await fetch(stubUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stub file: ${response.statusText}`);
-      }
-      return await response.json();
-    } catch (e) {
-      console.error(`Error loading stub for ${ChipFamily[chip]}:`, e);
-      throw e;
-    }
+    return stub;
   }
 
   private async uploadStub(stub: Stub): Promise<void> {
