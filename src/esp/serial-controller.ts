@@ -130,7 +130,7 @@ export class SerialController extends EventTarget {
       !this.connection.readable ||
       !this.connection.abortStreamController
     )
-      return async function* logStream() {};
+      return async function* logStream() { };
 
     const streamPipeOptions = {
       signal: this.connection.abortStreamController.signal,
@@ -143,7 +143,7 @@ export class SerialController extends EventTarget {
     this.connection.readable = newReadable;
 
     const reader = logReadable
-      .pipeThrough(new TextDecoderStream(), streamPipeOptions)
+      .pipeThrough(new TextDecoderStream() as unknown as ReadableWritablePair<string, Uint8Array>, streamPipeOptions)
       .pipeThrough(createLineBreakTransformer(), streamPipeOptions)
       .getReader();
 
@@ -502,8 +502,7 @@ export class SerialController extends EventTarget {
             ) {
               if (responsePacket.error > 0) {
                 throw new Error(
-                  `Device returned error for ${
-                    EspCommand[expectedCommand]
+                  `Device returned error for ${EspCommand[expectedCommand]
                   }: ${responsePacket.getErrorMessage(responsePacket.error)}`,
                 );
               }
